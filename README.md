@@ -11,14 +11,14 @@ You can choose between two teachers:
 
 **Option A — From-scratch CNN teacher**
 ```bash
-pip install torch torchvision
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 python train_teacher.py                          # train & save TeacherCNN
 python train_student.py --teacher manual         # distill student
 ```
 
 **Option B — Pretrained ResNet-18 teacher (torchvision)**
 ```bash
-pip install torch torchvision
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 python train_teacher_pretrained.py               # fine-tune ResNet-18
 python train_student.py --teacher pretrained     # distill student
 ```
@@ -28,6 +28,7 @@ Distill a large transformer (e.g. BERT-base) into a smaller one (e.g. DistilBERT
 
 ```bash
 pip install torch transformers datasets
+export HF_ENDPOINT=https://hf-mirror.com # set up mirror
 python distill_transformers.py
 ```
 
