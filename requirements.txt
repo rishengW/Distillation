@@ -1,0 +1,7 @@
+# Core (required for manual MLP distillation)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Optional (required for transformer distillation)
+transformers>=4.35.0
+datasets>=2.14.0
