@@ -28,6 +28,7 @@ from torch.utils.data import DataLoader
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    BitsAndBytesConfig,
     get_linear_schedule_with_warmup,
     DataCollatorForLanguageModeling,
 )
@@ -46,6 +47,14 @@ TEMPERATURE   = 4.0        # higher → softer teacher distribution
 ALPHA         = 0.7        # weight for soft (KL) loss; (1-α) for hard (CE) loss
 SAVE_PATH     = "student_qwen_distilled"
 
+# Quantization options for the (frozen) teacher. Saves VRAM at negligible
+# distillation-quality cost since the teacher is only used for forward passes
+# and its soft targets are smoothed by the temperature anyway.
+#   "none" - bf16/fp16 full precision  (~3.0 GB for 1.5B)
+#   "int8" - bitsandbytes 8-bit         (~1.7 GB)
+#   "int4" - bitsandbytes 4-bit NF4     (~1.0 GB, recommended on <=16 GB GPUs)
+TEACHER_QUANT = "none"
+
 DEVICE        = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 USE_BF16      = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 DTYPE         = torch.bfloat16 if USE_BF16 else (torch.float16 if torch.cuda.is_available() else torch.float32)
@@ -63,48 +72,77 @@ if tokenizer.pad_token is None:
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 print("Loading WikiText-2 dataset ...")
-raw = load_dataset("wikitext", "wikitext-2-raw-v1")
+raw = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1")
 
+# 1. Tokenize each line with NO truncation/padding — just raw token IDs.
 def tokenize(batch):
-    return tokenizer(
-        batch["text"],
-        truncation=True,
-        max_length=MAX_LEN,
-        padding=False,          # collator handles padding
-        return_special_tokens_mask=False,
-    )
+    return tokenizer(batch["text"], add_special_tokens=False)
 
 tokenized = raw.map(
     tokenize,
     batched=True,
     remove_columns=raw["train"].column_names,
 )
-tokenized.set_format("torch")
 
-# DataCollatorForLanguageModeling pads sequences and creates -100 labels for
-# padding positions so they are ignored in the cross-entropy loss.
+# 2. Concatenate all tokens, then split into fixed-length MAX_LEN chunks.
+#    This is the standard recipe for causal-LM pretraining/distillation:
+#    avoids empty rows, eliminates padding, and gives uniform batches.
+def group_texts(examples):
+    concatenated = {k: sum(examples[k], []) for k in examples.keys()}
+    total_len = len(concatenated[list(examples.keys())[0]])
+    # Drop the final partial chunk so every example is exactly MAX_LEN long.
+    total_len = (total_len // MAX_LEN) * MAX_LEN
+    result = {
+        k: [t[i : i + MAX_LEN] for i in range(0, total_len, MAX_LEN)]
+        for k, t in concatenated.items()
+    }
+    result["labels"] = [ids.copy() for ids in result["input_ids"]]
+    return result
+
+lm_dataset = tokenized.map(group_texts, batched=True)
+lm_dataset.set_format("torch")
+
+print(f"  Train chunks: {len(lm_dataset['train']):,}  "
+      f"Val chunks: {len(lm_dataset['validation']):,}  "
+      f"(each {MAX_LEN} tokens)")
+
+# Default collator just stacks pre-chunked tensors — no padding, no -100 needed.
 collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 train_loader = DataLoader(
-    tokenized["train"],
+    lm_dataset["train"],
     batch_size=BATCH_SIZE,
     shuffle=True,
     collate_fn=collator,
 )
 val_loader = DataLoader(
-    tokenized["validation"],
+    lm_dataset["validation"],
     batch_size=BATCH_SIZE * 2,
     shuffle=False,
     collate_fn=collator,
 )
 
 # ── Load teacher ──────────────────────────────────────────────────────────────
-print(f"\nLoading teacher : {TEACHER_NAME}")
+print(f"\nLoading teacher : {TEACHER_NAME}  (quant={TEACHER_QUANT})")
 teacher_kwargs = dict(
     torch_dtype=DTYPE,
     trust_remote_code=True,
     device_map="auto" if torch.cuda.is_available() else None,
 )
+if torch.cuda.is_available() and TEACHER_QUANT in ("int4", "int8"):
+    if TEACHER_QUANT == "int4":
+        teacher_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",          # NF4 > FP4 for LLM weights
+            bnb_4bit_compute_dtype=DTYPE,        # matmul still in bf16/fp16
+            bnb_4bit_use_double_quant=True,      # extra ~0.4 bits/param savings
+        )
+    else:
+        teacher_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+    # device_map is required by bitsandbytes; torch_dtype is ignored for the
+    # quantized weights (compute_dtype controls the matmul precision instead).
+    teacher_kwargs.pop("torch_dtype", None)
+
 teacher = AutoModelForCausalLM.from_pretrained(TEACHER_NAME, **teacher_kwargs)
 teacher.eval()
 # Freeze teacher — we never update its weights.
@@ -195,11 +233,11 @@ def evaluate_perplexity(model, loader, max_batches: int = 50) -> float:
     for i, batch in enumerate(loader):
         if i >= max_batches:
             break
-        input_ids = batch["input_ids"].to(DEVICE)
-        labels    = batch["labels"].to(DEVICE)
+        input_ids = batch["input_ids"].to(DEVICE).long()
+        labels    = batch["labels"].to(DEVICE).long()
         attention_mask = batch.get("attention_mask", None)
         if attention_mask is not None:
-            attention_mask = attention_mask.to(DEVICE)
+            attention_mask = attention_mask.to(DEVICE).long()
 
         out = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
         # out.loss is mean CE over non-padding tokens
@@ -235,7 +273,7 @@ print(f"  Student PPL : {student_ppl:.2f}\n")
 
 # ── Distillation training loop ────────────────────────────────────────────────
 print("=== Starting distillation ===")
-scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available() and not USE_BF16)
+scaler = torch.amp.GradScaler('cuda', enabled=torch.cuda.is_available() and not USE_BF16)
 
 for epoch in range(1, EPOCHS + 1):
     student.train()
@@ -243,14 +281,14 @@ for epoch in range(1, EPOCHS + 1):
     optimizer.zero_grad()
 
     for step, batch in enumerate(train_loader):
-        input_ids      = batch["input_ids"].to(DEVICE)
-        labels         = batch["labels"].to(DEVICE)
+        input_ids      = batch["input_ids"].to(DEVICE).long()
+        labels         = batch["labels"].to(DEVICE).long()
         attention_mask = batch.get("attention_mask", None)
         if attention_mask is not None:
-            attention_mask = attention_mask.to(DEVICE)
+            attention_mask = attention_mask.to(DEVICE).long()
 
         # ── Forward passes ────────────────────────────────────────────────────
-        with torch.cuda.amp.autocast(enabled=torch.cuda.is_available(), dtype=DTYPE):
+        with torch.amp.autocast('cuda', enabled=torch.cuda.is_available(), dtype=DTYPE):
             student_out = student(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
