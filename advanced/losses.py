@@ -183,7 +183,15 @@ def _scale_normalized_pdist(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
 
 
 def _triplet_angles(x: torch.Tensor) -> torch.Tensor:
-    """Cosines of triplet angles (i, j, k) with j as apex."""
+    """
+    Cosines of triplet angles (i, j, k) with j as apex.
+
+    Memory: produces an [B, B, B] tensor. For B=32 that's 32,768 entries
+    (~256 KB); for B=128 it's 2,097,152 entries (~16 MB). This O(B^3)
+    scaling is inherent to the RKD angle term and will OOM at large batch
+    sizes. Consider subsampling the batch or using gradient accumulation
+    when memory is tight.
+    """
     vd = x.unsqueeze(0) - x.unsqueeze(1)               # [B, B, D]
     vd = F.normalize(vd, p=2, dim=-1)
     return torch.einsum("ijd,kjd->ijk", vd, vd)
@@ -193,7 +201,12 @@ def rkd_loss_pooled(
     student_emb: torch.Tensor,       # [B, D_s]
     teacher_emb: torch.Tensor,       # [B, D_t]
 ) -> torch.Tensor:
-    """RKD distance + angle loss on pre-pooled embeddings."""
+    """RKD distance + angle loss on pre-pooled embeddings.
+
+    Note: the angle term allocates O(B^3) memory (see _triplet_angles).
+    For batches larger than ~64, consider subsampling or using
+    gradient accumulation to avoid OOM.
+    """
     s_d = _scale_normalized_pdist(student_emb.float())
     t_d = _scale_normalized_pdist(teacher_emb.float())
     dist_loss = F.smooth_l1_loss(s_d, t_d)
@@ -225,6 +238,11 @@ def causal_ce_loss(
     """Standard next-token CE with i → i+1 shift."""
     shift_logits = student_logits[..., :-1, :].contiguous().float()
     shift_labels = labels[..., 1:].contiguous()
+    # Guard against all-ignored batches: F.cross_entropy returns NaN
+    # when every target is ignore_index (no valid tokens to average).
+    n_valid = (shift_labels != -100).sum()
+    if n_valid == 0:
+        return shift_logits.new_tensor(0.0)
     return F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)),
         shift_labels.view(-1),

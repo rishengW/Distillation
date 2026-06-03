@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import os
 import random
+import sys
 import time
 from dataclasses import dataclass, field
 
@@ -71,6 +72,12 @@ from transformers import (
 )
 from datasets import load_dataset
 
+# Make sure the advanced/ directory is on sys.path so bare-name imports
+# (losses, components) work regardless of how the script is invoked.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
 from losses import (
     kl_logits_per_token,
     hidden_mse,
@@ -86,6 +93,7 @@ from components import (
     EMAModel,
     build_param_groups,
 )
+from arch_utils import extract_last_q
 
 # Use HuggingFace mirror for stable access from mainland China.
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
@@ -316,83 +324,12 @@ hidden_proj = HiddenProjector(
 ).to(CFG.device).to(DTYPE)
 
 
-# ── Architecture-agnostic MiniLMv2 wrapper ─────────────────────────────────
-# minilm_relation_kl in losses.py is model-agnostic — it just takes Q/K/V
-# tensors. Here we extract the last-layer Q from cached hidden_states
-# (no extra forward pass) using an architecture dispatch, and feed them in.
-#
-# Supported architectures:
-#   qwen2, llama, mistral, gemma  →  model.model.layers[-1].self_attn.q_proj
-#   opt                            →  model.model.decoder.layers[-1].self_attn.q_proj
-#   gpt_neox                       →  combined QKV, split into Q
-#   gpt2                           →  combined QKV, split into Q
-_ARCH_LAYER_PATHS = {
-    "qwen2":    ("model.layers", "input_layernorm", "self_attn.q_proj"),
-    "llama":    ("model.layers", "input_layernorm", "self_attn.q_proj"),
-    "mistral":  ("model.layers", "input_layernorm", "self_attn.q_proj"),
-    "gemma":    ("model.layers", "input_layernorm", "self_attn.q_proj"),
-    "gemma2":   ("model.layers", "input_layernorm", "self_attn.q_proj"),
-    "opt":      ("model.decoder.layers", "self_attn_layer_norm", "self_attn.q_proj"),
-    "gpt_neox": ("gpt_neox.layers", "input_layernorm", "attention.query_key_value"),
-    "gpt2":     ("transformer.h", "ln_1", "attn.c_attn"),
-}
-
-
-def _resolve_arch_paths(model):
-    """Return (layers_container, norm_attr_name, q_projector_name) for model type."""
-    arch = getattr(model.config, "model_type", "").lower()
-    paths = _ARCH_LAYER_PATHS.get(arch)
-    if paths is None:
-        raise NotImplementedError(
-            f"Architecture '{arch}' not supported by MiniLMv2 Q-extraction. "
-            f"Supported: {list(_ARCH_LAYER_PATHS)}. "
-            f"Add an entry to _ARCH_LAYER_PATHS for '{arch}'."
-        )
-    # Resolve the dotted layers path from the model root.
-    layer_container = model
-    for part in paths[0].split("."):
-        layer_container = getattr(layer_container, part)
-    return layer_container, paths[1], paths[2]
-
-
-def _split_q_from_qkv(weight: torch.Tensor, hidden_size: int,
-                       num_heads: int) -> torch.nn.Linear:
-    """Split a combined QKV weight (GPT-NeoX / GPT-2 style) into Q-only."""
-    # GPT-NeoX: Q,K,V are stacked (hidden_size × 3) in that order.
-    # GPT-2:    Q,K,V are stacked hidden_size × 3 but in Q,K,V order.
-    q_weight = weight[:hidden_size, :]
-    q_proj = torch.nn.Linear(hidden_size, hidden_size, bias=False)
-    q_proj.weight.data = q_weight
-    return q_proj
-
-
-def _extract_last_q(model, hidden_states):
-    """
-    Extract Q at the last transformer layer of any supported architecture.
-
-    HuggingFace `output_hidden_states` caches the *output* of each layer
-    plus the embedding output at index 0, so hidden_states[-2] is the input
-    to the final transformer block. Apply that block's pre-attention norm to
-    match what self-attention actually sees.
-    """
-    layers, norm_attr, q_attr = _resolve_arch_paths(model)
-    last_block = layers[-1]
-    norm = getattr(last_block, norm_attr)
-    normed = norm(hidden_states[-2])
-
-    # Resolve the Q projection (dotted attr name).
-    q_projector = last_block
-    for part in q_attr.split("."):
-        q_projector = getattr(q_projector, part)
-
-    # Handle combined QKV projections by splitting.
-    if hasattr(q_projector, "weight") and q_projector.weight.shape[0] != model.config.hidden_size:
-        # Combined QKV: weight is [3*hidden, hidden] → split first third.
-        hidden = model.config.hidden_size
-        q_proj = _split_q_from_qkv(q_projector.weight.data, hidden, model.config.num_attention_heads)
-        return q_proj(normed.to(q_proj.weight.dtype))
-
-    return q_projector(normed)
+# ── MiniLMv2 Q-relation wrapper ─────────────────────────────────────────────
+# extract_last_q (from arch_utils.py) handles architecture dispatch across
+# Qwen2, Llama, Mistral, Gemma, OPT, GPT-NeoX, and GPT-2.
+# minilm_relation_kl (from losses.py) computes the self-relation KL.
+# Together they extract the last-layer Q from cached hidden_states
+# (no extra forward pass) and compute MiniLMv2 loss in one call.
 
 
 def minilm_q_relation_loss(
@@ -408,9 +345,9 @@ def minilm_q_relation_loss(
     Q and a single shared `relation_heads` count can't apply uniformly.
     Q-only is the standard MiniLM-for-GQA recipe.
     """
-    s_q = _extract_last_q(student_model, student_hidden_states)
+    s_q = extract_last_q(student_model, student_hidden_states)
     with torch.no_grad():
-        t_q = _extract_last_q(teacher_model, teacher_hidden_states)
+        t_q = extract_last_q(teacher_model, teacher_hidden_states)
     return minilm_relation_kl(s_q, t_q, attention_mask, relation_heads)
 
 

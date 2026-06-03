@@ -536,10 +536,10 @@ class TestCausalCELoss:
         assert loss.isfinite()
         assert loss > 0
 
-        # With ALL labels -100, no valid shift label exists → NaN
+        # With ALL labels -100, the guard returns 0.0
         labels_none = torch.full((B, T), -100, dtype=torch.long)
-        loss_nan = causal_ce_loss(logits, labels_none)
-        assert torch.isnan(loss_nan)
+        loss_zero = causal_ce_loss(logits, labels_none)
+        assert loss_zero < 1e-6
 
 
 # ── build_layer_map ───────────────────────────────────────────────────────────
@@ -608,12 +608,12 @@ class TestTripletAngles:
         result = _triplet_angles(x)
         assert result.shape == (4, 4, 4)
 
-    def values_in_range(self):
+    def test_values_in_range(self):
         x = torch.randn(4, 8)
         result = _triplet_angles(x)
-        # Cosine should be in [-1, 1]
-        assert result.min() >= -1.0
-        assert result.max() <= 1.0
+        # Cosine should be in [-1, 1] (floating point ≈ 1.0000 allowed)
+        assert result.min() >= -1.0 - 1e-6
+        assert result.max() <= 1.0 + 1e-6
 
 
 # ── Run via pytest ────────────────────────────────────────────────────────────

@@ -55,6 +55,7 @@ from __future__ import annotations
 import math
 import os
 import random
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -70,6 +71,12 @@ from transformers import (
     get_cosine_schedule_with_warmup,
 )
 from datasets import load_dataset
+
+# Make sure the advanced/ directory is on sys.path so bare-name imports
+# (losses, components) work regardless of how the script is invoked.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
 
 # Shared distillation losses and components — canonical versions from
 # losses.py and components.py. Imported here to avoid duplication.

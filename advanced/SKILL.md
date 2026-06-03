@@ -103,10 +103,11 @@ re-running the BERT encoder.
 
 > **STATUS: DONE ✓** — Applied 2026-06-03.
 
-Replaced `_qwen_last_q` with `_extract_last_q` using an architecture registry
-(`_ARCH_LAYER_PATHS`). Supports Qwen2, Llama, Mistral, Gemma, OPT, GPT-NeoX,
-and GPT-2 via `model.config.model_type` dispatch. Combined QKV projections
-(GPT-NeoX, GPT-2) are auto-split to extract Q.
+Extracted architecture dispatch into `advanced/arch_utils.py` as `extract_last_q()`
+with a registry (`ARCH_LAYER_PATHS`). Supports Qwen2, Llama, Mistral, Gemma, OPT,
+GPT-NeoX, and GPT-2 via `model.config.model_type` dispatch. Combined QKV
+projections (GPT-NeoX, GPT-2) are auto-split to extract Q. This module has no
+HuggingFace `datasets` dependency and can be imported independently.
 
 ### 4b: Standardize `optimizer.zero_grad(set_to_none=True)`
 
@@ -134,3 +135,18 @@ All housekeeping items from the original audit are resolved:
 - **5b:** `optimizer.zero_grad(set_to_none=True)` standardized in both scripts.
 - Tracked `__pycache__/` files removed from git index (now `.gitignore`'d).
 - All changes committed on `main` as commit `d5d00f4`.
+
+---
+
+## Known Remaining Issues
+
+These are known limitations discovered during audit. They're not urgent enough
+to block a release but should be tracked for the next maintainer.
+
+| # | Issue | Severity | Notes |
+|---|---|---|---|
+| 1 | `_triplet_angles` O(n³) memory | Medium | Produces [B, B, B] tensor. B=32 → 32K entries, B=128 → 2M entries. Documented but not mitigated. Consider subsampling or gradient accumulation for large batches. |
+| 2 | `causal_ce_loss` all-padding guard | Low | Returns 0.0 when all labels are -100. Correct but silently drops loss signal — prefer `clamp(min=1)` pattern like other loss functions, though F.cross_entropy doesn't expose the token count directly. |
+| 3 | `datasets` + `pyarrow` segfault on Windows | Low | Some pyarrow builds crash on import inside pytest/subprocess. Workaround: import `arch_utils` (no datasets dependency) for architecture dispatch; import full pipeline scripts from the `advanced/` directory directly. |
+| 4 | No GPU/quantization tests | Low | All tests run on CPU with tiny mock models. No coverage of bf16 autocast, GradScaler, or int4/int8 teacher quantization paths. |
+| 5 | `distill_advanced_bert.py` still imports `math` | Trivial | Only used in inline `minilm_relation_loss`. Import is scoped to that one function; could be moved inside if desired. |
