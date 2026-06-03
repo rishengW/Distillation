@@ -1,0 +1,32 @@
+{
+  "expectations": [
+    {
+      "text": "Identifies at least 6 distinct functions or classes to replace with imports",
+      "passed": true,
+      "evidence": "Lists 8 items in summary table: build_layer_map, HiddenProjector, kl_logits, hidden_mse, attention_kl, UncertaintyWeights, EMAModel, build_param_groups — plus rkd_loss as optional 9th"
+    },
+    {
+      "text": "Identifies minilm_relation_loss as should stay inline or be handled specially",
+      "passed": true,
+      "evidence": "Section 'KEEP INLINE (1 item strongly recommended + 1 optional)' — 'STRONGLY KEEP INLINE' with detailed comparison table of Q+K+V vs Q-only, encoder interaction, and architecture coupling differences"
+    },
+    {
+      "text": "Provides specific import statements (e.g., 'from advanced.losses import ...')",
+      "passed": true,
+      "evidence": "Provides exact imports: 'from advanced.losses import kl_logits_classification as kl_logits', 'from advanced.components import HiddenProjector', etc."
+    },
+    {
+      "text": "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue",
+      "passed": true,
+      "evidence": "Explicitly notes: 'lines 366-377 re-run the BERT encoder inside the loss function when the hidden states are already available... performance bug (1.5-2x throughput cost)'"
+    },
+    {
+      "text": "Correctly distinguishes between items from losses.py vs components.py",
+      "passed": true,
+      "evidence": "Clear separation: REPLACE table has separate columns for losses.py vs components.py sources. Also distinguishes minilm_relation_loss as architecturally different and rkd_loss as optional."
+    }
+  ],
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "timing": {"executor_duration_seconds": 56.5, "total_duration_seconds": 56.5},
+  "eval_feedback": {"suggestions": [], "overall": "Perfect score. The with-skill run provides a thorough, well-structured analysis that exactly matches the skill's guidance while adding valuable detail (the Q+K+V vs Q-only comparison table, the Category 3 partial-replacement recommendation)."}
+}

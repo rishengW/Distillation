@@ -1,0 +1,13 @@
+{
+  "eval_id": 1,
+  "eval_name": "quick-fixes",
+  "prompt": "I'm working in the advanced/ folder of the distillation project. Can you look at distill_advanced.py and tell me what needs to be fixed before I start training?",
+  "assertions": [
+    "Mentions minilm_relation_heads startup validation as a needed fix",
+    "Mentions attention output / attn_implementation validation as a needed fix",
+    "Mentions missing __init__.py or namespace package issue",
+    "Mentions missing .gitignore or __pycache__ pollution",
+    "Provides specific code snippets or exact fix instructions (not just high-level description)",
+    "References specific file paths and approximate line numbers"
+  ]
+}

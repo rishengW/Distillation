@@ -1,0 +1,12 @@
+{
+  "eval_id": 2,
+  "eval_name": "bert-refactor",
+  "prompt": "Look at advanced/distill_advanced_bert.py and advanced/losses.py. The BERT script has a bunch of functions that are already in losses.py and components.py. Which ones should I replace with imports, and which should stay inline?",
+  "assertions": [
+    "Identifies at least 6 distinct functions or classes to replace with imports",
+    "Identifies minilm_relation_loss as should stay inline or be handled specially",
+    "Provides specific import statements (e.g., 'from advanced.losses import ...')",
+    "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue",
+    "Correctly distinguishes between items from losses.py vs components.py"
+  ]
+}

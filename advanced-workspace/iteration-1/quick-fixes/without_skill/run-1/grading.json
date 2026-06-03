@@ -1,0 +1,45 @@
+{
+  "expectations": [
+    {
+      "text": "Mentions minilm_relation_heads startup validation as a needed fix",
+      "passed": false,
+      "evidence": "The baseline analysis focuses on CUDA/CPU issues, bitsandbytes, attention_mask=None fallback, pad_token=EOS corruption, and optimizer waste — none of which are the four Priority 1 fixes from the skill. The minilm_relation_heads validation is never mentioned."
+    },
+    {
+      "text": "Mentions attention output / attn_implementation validation as a needed fix",
+      "passed": false,
+      "evidence": "Does not mention the eager attention requirement or the fact that sdpa/flash_attention_2 would break attention_kl."
+    },
+    {
+      "text": "Mentions missing __init__.py or namespace package issue",
+      "passed": false,
+      "evidence": "No mention of __init__.py or package structure anywhere in the analysis."
+    },
+    {
+      "text": "Mentions missing .gitignore or __pycache__ pollution",
+      "passed": false,
+      "evidence": "No mention of .gitignore or __pycache__ management."
+    },
+    {
+      "text": "Provides specific code snippets or exact fix instructions (not just high-level description)",
+      "passed": true,
+      "evidence": "Provides code for attention_mask fallback, loss_balancer conditional inclusion, and save_dir pathlib fix"
+    },
+    {
+      "text": "References specific file paths and approximate line numbers",
+      "passed": true,
+      "evidence": "References specific lines: 304-315, 376, 426-428, 182, 148, 91"
+    }
+  ],
+  "summary": {"passed": 2, "failed": 4, "total": 6, "pass_rate": 0.33},
+  "timing": {"executor_duration_seconds": 334.0, "total_duration_seconds": 334.0},
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "All four defensive-fix assertions",
+        "reason": "The baseline found legitimate issues (attention_mask=None guard, pad_token=EOS risk, loss_balancer optimizer waste) that the skill should consider adding to its catalog. These are real bugs the skill currently misses."
+      }
+    ],
+    "overall": "Baseline found different issues than the skill — it focused on runtime environment concerns (CUDA, bitsandbytes) and code robustness (attention_mask fallback, pad_token) while missing the four defensive startup validations that the skill prioritizes. This validates that the skill adds value beyond what a general code audit would find."
+  }
+}

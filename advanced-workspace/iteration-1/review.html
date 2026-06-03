@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "advanced-distillation-dev", "runs": [{"id": "quick-fixes-with_skill", "prompt": "I'm working in the advanced/ folder of the distillation project. Can you look at distill_advanced.py and tell me what needs to be fixed before I start training?", "eval_id": 1, "outputs": [{"name": "response.md", "type": "text", "content": "# distill_advanced.py \u00e2\u20ac\u201d Pre-Training Audit\n\nAfter reading the skill file (SKILL.md) and auditing the entire codebase in `advanced/`, here is what needs to be fixed before training starts, ordered by severity.\n\n---\n\n## Priority 1 \u00e2\u20ac\u201d Apply These Immediately (defensive, <5 min each)\n\nThese four issues cause silent failures deep into training or create project-level friction. They should be fixed before the first `python advanced/distill_advanced.py` run.\n\n### 1. Validate `minilm_relation_heads` at startup (no startup check)\n\n**File:** `distill_advanced.py` (around line 291)\n\n**Problem:** Line 128 sets `minilm_relation_heads = 64`. If someone changes this to a value that does not divide both Q hidden dims (teacher 1536, student 896), the crash happens in `reshape_to_relation_heads()` inside `losses.py:138` \u00e2\u20ac\u201d after dataset loading, model init, and baseline eval. That wastes 30+ seconds every time.\n\nValid values are divisors of gcd(1536, 896) = 128: {1, 2, 4, 8, 16, 32, 64, 128}. The default (64) is fine, but there is no guard.\n\n**Fix:** Insert validation after the model-info print block (~line 288, after `print(f\"Layer map...\")`) :\n\n```python\nif CFG.minilm_relation_heads > 0:\n    assert teacher_hidden % CFG.minilm_relation_heads == 0, (\n        f\"minilm_relation_heads ({CFG.minilm_relation_heads}) must divide \"\n        f\"teacher hidden size ({teacher_hidden})\"\n    )\n    assert student_hidden % CFG.minilm_relation_heads == 0, (\n        f\"minilm_relation_heads ({CFG.minilm_relation_heads}) must divide \"\n        f\"student hidden size ({student_hidden})\"\n    )\n```\n\n---\n\n### 2. Validate attention outputs are available (no guard on attn_implementation)\n\n**File:** `distill_advanced.py` (same location as Fix 1)\n\n**Problem:** The script sets `attn_implementation=\"eager\"` on both models (lines 238, 267), which is required to get non-None `attentions` tuples. But if someone edits these to `\"sdpa\"` or `\"flash_attention_2\"` (e.g., to improve throughput), `student_out.attentions` and `teacher_out.attentions` become `None`. The `attention_kl()` call at line 460 then crashes with an opaque TypeError on the first training step \u00e2\u20ac\u201d after baseline eval, so the user has already waited.\n\n**Fix:** Insert these assertions after the validation block from Fix 1:\n\n```python\nassert teacher.config._attn_implementation == \"eager\", (\n    \"teacher must use attn_implementation='eager' to return attention weights\"\n)\nassert student.config._attn_implementation == \"eager\", (\n    \"student must use attn_implementation='eager' to return attention weights\"\n)\n```\n\n---\n\n### 3. Missing `advanced/__init__.py`\n\n**File:** `E:\\Distillation\\advanced\\__init__.py` (needs to be created)\n\n**Problem:** The `advanced/` directory is an implicit namespace package \u00e2\u20ac\u201d there is no `__init__.py`. Currently `distill_advanced.py` gets away with `from losses import ...` because it is co-located in the same directory, but `from advanced.losses import ...` will fail. This blocks:\n\n- Writing tests in `advanced/tests/` that import via `advanced.losses`.\n- Any script outside the `advanced/` folder that tries to import these modules.\n- Proper Python packaging conventions.\n\n**Fix:** Create `advanced/__init__.py` with minimal content:\n\n```python\n\"\"\"Advanced multi-signal knowledge distillation pipeline.\"\"\"\n```\n\n---\n\n### 4. Missing `.gitignore` at repo root\n\n**File:** `E:\\Distillation\\.gitignore` (needs to be created)\n\n**Problem:** Running the script generates `__pycache__/` directories and `.pyc` files. Without a `.gitignore`, these show up as untracked in `git status`. The repo currently has no `.gitignore` at all.\n\n**Fix:** Create a `.gitignore` at the repo root:\n\n```gitignore\n__pycache__/\n*.pyc\n*.pyo\n*.pyd\n.Python\n*.so\n*.egg-info/\ndist/\nbuild/\n```\n\n---\n\n## Priority 2 \u00e2\u20ac\u201d Missing Unit Tests for `losses.py`\n\n**File:** `advanced/tests/test_losses.py` (needs to be created)\n\n**Problem:** The docstring in `losses.py` (lines 3-6) says the functions are \"straightforward to unit-test with hand-computed expected values on tiny inputs\", and the README describes the BERT script as a \"unit-test surface area\" \u00e2\u20ac\u201d but no tests exist anywhere. These functions are pure tensor math with zero model coupling, so tests are easy to write and would catch regressions when loss formulas change.\n\nFunctions that should be tested (tiny tensors, B=2, T=3, V=4, D=8):\n\n| Function | What to verify |\n|---|---|\n| `kl_logits_per_token` | KL math, T^2 scaling, padding mask |\n| `kl_logits_classification` | Same, on [B,C] logits |\n| `hidden_mse` | MSE with mock HiddenProjector, padding exclusion |\n| `attention_kl` | Row re-normalization, query masking |\n| `minilm_relation_kl` | Relation softmax, KL averaged over heads |\n| `rkd_loss_pooled` | Pairwise distances + triplet angles |\n| `rkd_loss_token_pool` | Mean-pooling correctness |\n| `causal_ce_loss` | Shift logic, ignore_index=-100 |\n| `build_layer_map` | Edge ratios (1->1, 24->28, etc.), ValueError |\n| `reshape_to_relation_heads` | Permutation correctness, ValueError |\n| `relation_distribution` | Softmax sums to 1, padding keys |\n\n---\n\n## Priority 3 \u00e2\u20ac\u201d Refactor `distill_advanced_bert.py`\n\n**File:** `distill_advanced_bert.py`\n\n**Problem:** ~300 lines of code are duplicated from `losses.py` and `components.py`. The BERT script defines its own `HiddenProjector`, `kl_logits`, `hidden_mse`, `attention_kl`, `build_layer_map`, `UncertaintyWeights`, `EMAModel`, and `build_param_groups`. Bugs fixed in one copy do not propagate to the other.\n\nThere is also a duplicate forward pass in `minilm_relation_loss` (BERT script, lines 366-377) that re-runs the BERT encoder to get last-layer hidden states, even though the main training loop already has them from `student_out.hidden_states` and `teacher_out.hidden_states`. This costs 1.5-2x throughput.\n\n**Fix:** Replace duplicated definitions with `from advanced.losses import ...` and `from advanced.components import ...` (depends on Fix 3 being done first). Refactor `minilm_relation_loss` to accept cached `hidden_states` tuples instead of re-running the encoder.\n\n---\n\n## Priority 4 \u00e2\u20ac\u201d Future Work (needs design discussion)\n\nThese are not blockers for training but are known technical debt items:\n\n1. **`_qwen_last_q` hardcodes Qwen2 internals** (`distill_advanced.py:304-315`): references `model.model.layers[-1]`, `input_layernorm`, `q_proj`. To support Llama, GPT-NeoX, or other architectures, an architecture-detection dispatch is needed.\n\n2. **`optimizer.zero_grad()` inconsistency**: `distill_advanced.py` uses `set_to_none=True` (line 417, line 506) which is more memory-efficient. `distill_advanced_bert.py` uses the default `set_to_none=False`. Should standardize on `True`.\n\n3. **Unimplemented features from README**: GKD / on-policy KD, sequence-level distillation, DPO/preference distillation, TAKD (teacher-assistant), and LoRA on the student are all listed in README.md but not implemented.\n\n---\n\n## Summary\n\n| # | Issue | Severity | File | Est. fix time |\n|---|---|---|---|---|\n| 1 | No `minilm_relation_heads` startup validation | Critical | distill_advanced.py | 2 min |\n| 2 | No guard on attention implementation | Critical | distill_advanced.py | 2 min |\n| 3 | Missing `__init__.py` | High | advanced/ | <1 min |\n| 4 | Missing `.gitignore` | Medium | Repo root | <1 min |\n| 5 | No unit tests | Medium | advanced/tests/ | 1-2 hours |\n| 6 | BERT script code duplication | Low | distill_advanced_bert.py | 30 min |\n| 7 | Qwen2-hardcoded internals | Low | distill_advanced.py | design needed |\n| 8 | `zero_grad` inconsistency | Low | both scripts | <1 min |\n\n**Recommended order:** Apply Fixes 1-4 (Priority 1) before your first training run. Start with Fixes 3 and 4 (standalone), then Fixes 1 and 2 together in `distill_advanced.py`. After that, the script is safe to train with.\n"}], "grading": {"expectations": [{"text": "Mentions minilm_relation_heads startup validation as a needed fix", "passed": true, "evidence": "Section '1. Validate minilm_relation_heads at startup' with full code fix: 'if CFG.minilm_relation_heads > 0: assert teacher_hidden % CFG.minilm_relation_heads == 0'"}, {"text": "Mentions attention output / attn_implementation validation as a needed fix", "passed": true, "evidence": "Section '2. Validate attention outputs are available' with code: 'assert teacher.config._attn_implementation == \"eager\"'"}, {"text": "Mentions missing __init__.py or namespace package issue", "passed": true, "evidence": "Section '3. Missing advanced/__init__.py' with fix: create file with docstring content"}, {"text": "Mentions missing .gitignore or __pycache__ pollution", "passed": true, "evidence": "Section '4. Missing .gitignore at repo root' with full gitignore content"}, {"text": "Provides specific code snippets or exact fix instructions (not just high-level description)", "passed": true, "evidence": "All four fixes include complete executable Python code blocks and gitignore content"}, {"text": "References specific file paths and approximate line numbers", "passed": true, "evidence": "References 'line 128', 'line 291', 'lines 238, 267', 'line 288', specific file paths like 'E:\\Distillation\\advanced\\distill_advanced.py'"}], "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}, "timing": {"executor_duration_seconds": 44.8, "total_duration_seconds": 44.8}, "eval_feedback": {"suggestions": [], "overall": "All assertions pass. The with-skill run precisely covers every item from the skill's Priority 1 checklist with exact code snippets."}}}, {"id": "quick-fixes-without_skill", "prompt": "I'm working in the advanced/ folder of the distillation project. Can you look at distill_advanced.py and tell me what needs to be fixed before I start training?", "eval_id": 1, "outputs": [{"name": "response.md", "type": "text", "content": "# Analysis of `distill_advanced.py` -- Issues to Fix Before Training\n\nI reviewed `advanced/distill_advanced.py` along with its dependencies (`losses.py`, `components.py`) and inspected the runtime environment. Below are the findings, ordered from most critical to least.\n\n---\n\n## 1. CRITICAL: `bitsandbytes` is not installed, but `teacher_quant` defaults to `\"none\"`\n\n- Environment: **CPU only** (no CUDA), `bitsandbytes` not installed.\n- The default `teacher_quant = \"none\"` is fine for a CPU run, so no crash here.\n- **However**, if you intend to run on a GPU later and want to use int4/int8 quantization for the teacher, `bitsandbytes` must be installed separately (`pip install bitsandbytes`).\n- On CPU, training Qwen2.5-1.5B (teacher) + Qwen2.5-0.5B (student) at `batch_size=2` will be **impractically slow** -- suitable only for smoke-testing the pipeline, not actual training.\n\n---\n\n## 2. CRITICAL: Data parallelism / multi-GPU not handled\n\n- `device_map=\"auto\"` is used for both teacher and student (lines 235, 264). On a single GPU or CPU this is harmless, but on a multi-GPU machine this maps the *entire* model to one device rather than sharding.\n- For multi-GPU training, you need `DataParallel` or `DistributedDataParallel` wrapping. Currently neither is implemented.\n- If you plan to use a multi-GPU setup, add DDP support (init_process_group, DistributedSampler, etc.) before training.\n\n---\n\n## 3. HIGH: `_qwen_last_q` is brittle -- fragile indexing of hidden states\n\nIn `_qwen_last_q` (line 304-315):\n\n```python\nnormed = last_block.input_layernorm(hidden_states[-2])\n```\n\nThe function assumes that `hidden_states[-2]` is always the input to the final transformer block. This is **correct for Qwen2.5** because HuggingFace `output_hidden_states` returns a tuple where:\n- Index 0 = embedding output\n- Index 1 = output of layer 0\n- ...\n- Index N = output of layer N-1 (last layer)\n\nSo `hidden_states[-2]` = output of the penultimate layer = input to the last layer. This works for both the 24-layer student and 28-layer teacher.\n\n**But** this is brittle:\n- If you switch to a different model family (Llama, Mistral, GPT-2) which may have a different structure (e.g., a final norm before hidden_states is returned), this will silently break.\n- If you switch model types with different numbers of \"extra\" hidden states (e.g., `past_key_values`), the indexing will be wrong.\n\n**Fix**: Add a validation assertion or docstring that clearly documents the assumption:\n\n```python\n# hidden_states tuple length = num_layers + 1 (embedding + layers)\n# So hidden_states[-2] = penultimate layer output = last layer input\nassert len(hidden_states) == model.config.num_hidden_layers + 1\n```\n\n---\n\n## 4. HIGH: `attention_mask` could be `None` with no guard\n\nAt lines 376 and 426-428:\n\n```python\nattention_mask = batch.get(\"attention_mask\")\nif attention_mask is not None:\n    attention_mask = attention_mask.to(CFG.device, non_blocking=True).long()\n```\n\nIf `attention_mask` is `None`, it remains `None`. Then at lines 457-473, every loss function receives `attention_mask=None`, which would crash with `AttributeError: 'NoneType' object has no attribute 'unsqueeze'`.\n\n**In practice**, this is unlikely -- `DataCollatorForLanguageModeling` uses `tokenizer.pad()` which always returns `attention_mask`, and `group_texts` produces uniformly sized chunks. But it is a latent crash for any batch where the dataset format changes or the collator behavior differs.\n\n**Fix**: Add a fallback:\n\n```python\nif attention_mask is None:\n    attention_mask = torch.ones_like(input_ids)\n```\n\n---\n\n## 5. MEDIUM: `pad_token = eos_token` causes data-dependent label corruption\n\nAt line 182:\n\n```python\nif tokenizer.pad_token is None:\n    tokenizer.pad_token = tokenizer.eos_token\n```\n\nThis means `pad_token_id == eos_token_id`. In `DataCollatorForLanguageModeling` (transformers 4.47.1), the collator sets:\n\n```python\nlabels = batch[\"input_ids\"].clone()\nif self.tokenizer.pad_token_id is not None:\n    labels[labels == self.tokenizer.pad_token_id] = -100\n```\n\nSo **any token in the data that happens to have the same ID as the EOS token is masked to -100 in the labels**, excluding it from the CE and KL losses. For Qwen2.5, `eos_token` is `<|im_end|>` with ID `151645`. In WikiText-2, this token is unlikely to appear, so this might not cause measurable harm. But it is a latent data corruption bug.\n\n**Mitigation**: Use a dedicated pad token instead of sharing with EOS:\n```python\nif tokenizer.pad_token is None:\n    tokenizer.add_special_tokens({'pad_token': '[PAD]'})\n```\n(Note: This would require resizing the model embeddings, which complicates things. The current approach is the pragmatic trade-off adopted by most open-source repos.)\n\n---\n\n## 6. MEDIUM: `batch_size=2` with `grad_accum=16` on CPU is unrealistic\n\n- Config: `batch_size=2`, `grad_accum=16` (effective batch = 32).\n- On CPU, `batch_size=2` for a 1.5B + 0.5B model pair will use significant memory and be extremely slow. A single forward pass through both models could take minutes.\n- The `eval_max_batches=50` is fine for a smoke test, but even 50 batches of perplexity eval on the teacher (1.5B params) will be very slow on CPU.\n\n**Suggestion**: For smoke-testing on CPU, reduce to `eval_max_batches=2` and `epochs=1`. For actual training, a GPU with at least 16 GB VRAM is needed (or use int4 quantization with 10+ GB).\n\n---\n\n## 7. MEDIUM: `loss_balancer` parameters in optimizer even when `learn_loss_weights=False`\n\nAt line 347-349:\n\n```python\noptimizer = torch.optim.AdamW(\n    build_param_groups(student, hidden_proj, loss_balancer, weight_decay=CFG.weight_decay),\n    ...\n)\n```\n\nThe `loss_balancer` is included in optimizer parameters regardless of `learn_loss_weights`. When disabled, its parameters (`log_var`) get zero gradients (since the balancer's `forward()` is never called), wasting optimizer state memory.\n\n**Fix**: Conditionally exclude it:\n\n```python\nparam_modules = [student, hidden_proj]\nif CFG.learn_loss_weights:\n    param_modules.append(loss_balancer)\noptimizer = torch.optim.AdamW(\n    build_param_groups(*param_modules, weight_decay=CFG.weight_decay),\n    ...\n)\n```\n\n---\n\n## 8. LOW: `save_dir` is relative -- unexpected working directory issues\n\nAt line 148:\n\n```python\nsave_dir: str = \"advanced/student_qwen_advanced\"\n```\n\nIf you run the script from a different directory (e.g., `python E:/Distillation/advanced/distill_advanced.py`), the saved model goes to a different location than expected. The `os.makedirs` call at line 564 will succeed silently.\n\nBetter practice: use an absolute path or a path relative to the script's location:\n\n```python\nimport pathlib\n_SCRIPT_DIR = pathlib.Path(__file__).parent\nsave_dir: str = str(_SCRIPT_DIR / \"student_qwen_advanced\")\n```\n\n---\n\n## 9. LOW: Missing `ignore_mismatched_sizes=True` for student loading\n\nAt line 260-268, the student is loaded without `ignore_mismatched_sizes=True`. For models from the same architecture family (Qwen2.5 in both cases), this is fine. But if you ever swap to a cross-architecture scenario, you will need it:\n\n```python\nstudent = AutoModelForCausalLM.from_pretrained(\n    CFG.student_name,\n    torch_dtype=DTYPE,\n    trust_remote_code=True,\n    device_map=\"auto\" if torch.cuda.is_available() else None,\n    output_hidden_states=True,\n    output_attentions=True,\n    attn_implementation=\"eager\",\n    # ignore_mismatched_sizes=True,  # uncomment if architectures don't match\n)\n```\n\n---\n\n## 10. LOW: `HF_ENDPOINT` mirror may fail outside mainland China\n\nAt line 91:\n\n```python\nos.environ.setdefault(\"HF_ENDPOINT\", \"https://hf-mirror.com\")\n```\n\nIf you are outside mainland China, access to `hf-mirror.com` may be unreliable or blocked. Comment this out to use the default HuggingFace endpoint:\n\n```python\n# os.environ.setdefault(\"HF_ENDPOINT\", \"https://hf-mirror.com\")\n```\n\n---\n\n## 11. COSMETIC: Redundant `use_cache=False`\n\nAt line 273 after `gradient_checkpointing_enable()`:\n\n```python\nstudent.config.use_cache = False\n```\n\nIn transformers >= 4.36.0, `gradient_checkpointing_enable()` automatically sets `use_cache = False`. The explicit call is harmless but redundant in the current version (4.47.1).\n\n---\n\n## Summary\n\n| # | Severity | Issue |\n|---|----------|-------|\n| 1 | Critical | No CUDA + no bitsandbytes makes GPU training impossible; CPU is for smoke tests only |\n| 2 | Critical | No multi-GPU support (DDP missing) |\n| 3 | High | `_qwen_last_q` has brittle hidden_states indexing with no guard |\n| 4 | High | `attention_mask=None` is a latent crash path |\n| 5 | Medium | `pad_token = eos_token` can silently corrupt labels |\n| 6 | Medium | `batch_size=2` with `grad_accum=16` unrealistic for CPU training |\n| 7 | Medium | `loss_balancer` in optimizer even when `learn_loss_weights=False` wastes memory |\n| 8 | Low | Relative `save_dir` depends on working directory |\n| 9 | Low | Missing `ignore_mismatched_sizes` for cross-architecture scenarios |\n| 10 | Low | HF mirror config may block outside China |\n| 11 | Cosmetic | Redundant `use_cache=False` |\n\n**Bottom line for training**: The code is structurally sound for the architecture pair it targets (Qwen2.5-1.5B -> Qwen2.5-0.5B). To actually train, you need a CUDA GPU (preferably >= 16 GB VRAM) and optionally `bitsandbytes` for teacher quantization. Fix items 3 (add guard on hidden_states indexing) and 4 (add attention_mask fallback) for robustness. Items 5-11 are version-/environment-dependent improvements.\n"}], "grading": {"expectations": [{"text": "Mentions minilm_relation_heads startup validation as a needed fix", "passed": false, "evidence": "The baseline analysis focuses on CUDA/CPU issues, bitsandbytes, attention_mask=None fallback, pad_token=EOS corruption, and optimizer waste \u00e2\u20ac\u201d none of which are the four Priority 1 fixes from the skill. The minilm_relation_heads validation is never mentioned."}, {"text": "Mentions attention output / attn_implementation validation as a needed fix", "passed": false, "evidence": "Does not mention the eager attention requirement or the fact that sdpa/flash_attention_2 would break attention_kl."}, {"text": "Mentions missing __init__.py or namespace package issue", "passed": false, "evidence": "No mention of __init__.py or package structure anywhere in the analysis."}, {"text": "Mentions missing .gitignore or __pycache__ pollution", "passed": false, "evidence": "No mention of .gitignore or __pycache__ management."}, {"text": "Provides specific code snippets or exact fix instructions (not just high-level description)", "passed": true, "evidence": "Provides code for attention_mask fallback, loss_balancer conditional inclusion, and save_dir pathlib fix"}, {"text": "References specific file paths and approximate line numbers", "passed": true, "evidence": "References specific lines: 304-315, 376, 426-428, 182, 148, 91"}], "summary": {"passed": 2, "failed": 4, "total": 6, "pass_rate": 0.33}, "timing": {"executor_duration_seconds": 334.0, "total_duration_seconds": 334.0}, "eval_feedback": {"suggestions": [{"assertion": "All four defensive-fix assertions", "reason": "The baseline found legitimate issues (attention_mask=None guard, pad_token=EOS risk, loss_balancer optimizer waste) that the skill should consider adding to its catalog. These are real bugs the skill currently misses."}], "overall": "Baseline found different issues than the skill \u00e2\u20ac\u201d it focused on runtime environment concerns (CUDA, bitsandbytes) and code robustness (attention_mask fallback, pad_token) while missing the four defensive startup validations that the skill prioritizes. This validates that the skill adds value beyond what a general code audit would find."}}}, {"id": "bert-refactor-with_skill", "prompt": "Look at advanced/distill_advanced_bert.py and advanced/losses.py. The BERT script has a bunch of functions that are already in losses.py and components.py. Which ones should I replace with imports, and which should stay inline?", "eval_id": 2, "outputs": [{"name": "response.md", "type": "text", "content": "# Refactoring Analysis: `distill_advanced_bert.py` -> shared imports\n\nI compared every function and class in `distill_advanced_bert.py` against `losses.py` and `components.py`. Below is the full mapping: which definitions can be replaced with imports, which should stay inline, and the reasoning for each.\n\n---\n\n## REPLACE with imports (8 items)\n\nThese are direct duplicates of the shared modules. Replacing them means bug fixes in `losses.py` / `components.py` automatically propagate to the BERT script.\n\n| Inline definition (lines) | Import to add | Notes |\n|---|---|---|\n| `build_layer_map` (217-223) | `from advanced.losses import build_layer_map` | The shared version adds input validation (`ValueError` on non-positive counts) that the BERT script lacks. Strict improvement. |\n| `HiddenProjector` class (233-244) | `from advanced.components import HiddenProjector` | Functionally identical. The shared version exposes a `bias` kwarg (default `False`) that the BERT version hardcodes \u00e2\u20ac\u201d BERT's instantiation call is unaffected since it doesn't pass `bias`. |\n| `kl_logits` (255-271) | `from advanced.losses import kl_logits_classification as kl_logits` | Same logic (classification logits, no token dim). The shared version casts to `.float()` for fp32 stability; the BERT version doesn't \u00e2\u20ac\u201d the shared one is safer. |\n| `hidden_mse` (274-302) | `from advanced.losses import hidden_mse` | Same algorithm. Shared version adds `.float()` casts on tensors. |\n| `attention_kl` (305-339) | `from advanced.losses import attention_kl` | Same algorithm. Shared version adds `.float()` casts on attention tensors. |\n| `UncertaintyWeights` class (464-483) | `from advanced.components import UncertaintyWeights` | Identical classes. |\n| `EMAModel` class (489-514) | `from advanced.components import EMAModel` | Shared version adds a guard (`if self.decay <= 0: return` in `update()`) for disabling EMA via non-positive decay. The BERT version lacks this \u00e2\u20ac\u201d shared is more robust. |\n| `build_param_groups` (521-542) | `from advanced.components import build_param_groups` | Shared version also excludes `\"norm.weight\"` (RMSNorm) from weight decay, in addition to `\"bias\"`, `\"LayerNorm.weight\"`, `\"layer_norm.weight\"` that the BERT version handles. More complete. |\n\n---\n\n## KEEP INLINE (1 item strongly recommended + 1 optional)\n\n### `minilm_relation_loss` (lines 342-415) \u00e2\u20ac\u201d STRONGLY KEEP INLINE\n\n**Why it differs from the shared version:**\n\n| Aspect | BERT inline (`distill_advanced_bert.py`) | Shared (`losses.py` `minilm_relation_kl`) |\n|---|---|---|\n| Projections | Q + K + V (full MHA: `bert.encoder.layer[-1].attention.self`) | Q-only (designed for GQA models like Qwen) |\n| Encoder interaction | Re-runs `model.bert(...)` to get last-layer hidden states | Takes already-projected tensors (`s_proj`, `t_proj`) \u00e2\u20ac\u201d caller is responsible for providing them |\n| Loop over terms | Loops over `[(s_q, t_q), (s_k, t_k), (s_v, t_v)]`, averages all 3 | Single call per (s, t) pair \u00e2\u20ac\u201d caller loops if needed |\n| Architecture coupling | Accesses `model.bert.encoder.layer[-1].attention.self` directly | No model coupling \u00e2\u20ac\u201d pure tensor math |\n\nThe BERT version and the shared version solve different problems: the BERT version is a self-contained function that knows about BERT's internal structure and computes Q/K/V; the shared version is a generic KL-on-relation-distributions helper for GQA models that expects the caller to have already extracted projections. Replacing one with the other would require rewriting the callsite and breaking the shared module's GQA focus.\n\n**The SKILL.md Priority 3b fix** (duplicate forward pass in minilm_relation_loss lines 366-377) is a separate concern from the import question. Lines 366-377 re-run the BERT encoder inside the loss function when the hidden states are already available from the main `model(...)` call. This is a performance bug (1.5-2x throughput cost) but not an import-vs-inline question \u00e2\u20ac\u201d it needs a signature change to accept cached hidden states, not an import replacement.\n\n---\n\n### `rkd_loss` (lines 418-461) \u00e2\u20ac\u201d OPTIONAL REPLACE\n\n**Comparison with shared `rkd_loss_pooled` (losses.py:192-205):**\n\nThe BERT version:\n- Takes `student_cls` and `teacher_cls` (already-pooled [CLS] embeddings, shape `[B, D]`)\n- Defines `pdist()` and `pangle()` as inner functions\n- Computes distance + angle loss\n\nThe shared `rkd_loss_pooled`:\n- Takes `student_emb` and `teacher_emb` (generic pre-pooled embeddings, same shape contract)\n- Delegates to module-level helpers `_scale_normalized_pdist` and `_triplet_angles`\n- Computes the exact same distance + angle loss\n\n**They are functionally identical.** The BERT callsite:\n```python\ns_cls = student_out.hidden_states[-1][:, 0, :]\nt_cls = teacher_out.hidden_states[-1][:, 0, :]\nl_rkd = rkd_loss(s_cls, t_cls)\n```\ncould be replaced with:\n```python\ns_cls = student_out.hidden_states[-1][:, 0, :]\nt_cls = teacher_out.hidden_states[-1][:, 0, :]\nl_rkd = rkd_loss_pooled(s_cls, t_cls)\n```\nwithout any behavior change.\n\n**Verdict from the skill:** \"Can replace with `rkd_loss_pooled(s_cls, t_cls)` from `losses.py`, or keep inline for clarity.\" I lean toward replacing it \u00e2\u20ac\u201d it removes more duplicated code and the shared module's `_scale_normalized_pdist` handles the edge case of all-zero distances (where `.mean()` would crash) better than the BERT version's `s_d[s_d > 0].mean()`.\n\n---\n\n## Summary table\n\n```\nFunction/Class            Lines      Shared in        Replace?     Reasoning\n\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac                   \u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac      \u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac         \u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac      \u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\u00e2\u201d\u20ac\nbuild_layer_map           217-223    losses.py        YES          Identical + validation\nHiddenProjector           233-244    components.py    YES          Identical\nkl_logits                 255-271    losses.py        YES          Same as kl_logits_classification\nhidden_mse                274-302    losses.py        YES          Same logic + fp32 casts\nattention_kl              305-339    losses.py        YES          Same logic + fp32 casts\nminilm_relation_loss      342-415    losses.py        NO           Q+K+V vs Q-only; model-coupled\nrkd_loss                  418-461    losses.py        OPTIONAL     Same math; rkd_loss_pooled works\nUncertaintyWeights        464-483    components.py    YES          Identical\nEMAModel                  489-514    components.py    YES          Identical + decay guard\nbuild_param_groups        521-542    components.py    YES          Identical + RMSNorm coverage\n```\n\n**Bottom line:** 8 definitions should be replaced with imports, 1 (`minilm_relation_loss`) must stay inline, and 1 (`rkd_loss`) is optional but recommended for replacement. This removes roughly 180 lines of duplicated code from the BERT script while keeping the architecturally distinct logic in place.\n"}], "grading": {"expectations": [{"text": "Identifies at least 6 distinct functions or classes to replace with imports", "passed": true, "evidence": "Lists 8 items in summary table: build_layer_map, HiddenProjector, kl_logits, hidden_mse, attention_kl, UncertaintyWeights, EMAModel, build_param_groups \u00e2\u20ac\u201d plus rkd_loss as optional 9th"}, {"text": "Identifies minilm_relation_loss as should stay inline or be handled specially", "passed": true, "evidence": "Section 'KEEP INLINE (1 item strongly recommended + 1 optional)' \u00e2\u20ac\u201d 'STRONGLY KEEP INLINE' with detailed comparison table of Q+K+V vs Q-only, encoder interaction, and architecture coupling differences"}, {"text": "Provides specific import statements (e.g., 'from advanced.losses import ...')", "passed": true, "evidence": "Provides exact imports: 'from advanced.losses import kl_logits_classification as kl_logits', 'from advanced.components import HiddenProjector', etc."}, {"text": "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue", "passed": true, "evidence": "Explicitly notes: 'lines 366-377 re-run the BERT encoder inside the loss function when the hidden states are already available... performance bug (1.5-2x throughput cost)'"}, {"text": "Correctly distinguishes between items from losses.py vs components.py", "passed": true, "evidence": "Clear separation: REPLACE table has separate columns for losses.py vs components.py sources. Also distinguishes minilm_relation_loss as architecturally different and rkd_loss as optional."}], "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}, "timing": {"executor_duration_seconds": 56.5, "total_duration_seconds": 56.5}, "eval_feedback": {"suggestions": [], "overall": "Perfect score. The with-skill run provides a thorough, well-structured analysis that exactly matches the skill's guidance while adding valuable detail (the Q+K+V vs Q-only comparison table, the Category 3 partial-replacement recommendation)."}}}, {"id": "bert-refactor-without_skill", "prompt": "Look at advanced/distill_advanced_bert.py and advanced/losses.py. The BERT script has a bunch of functions that are already in losses.py and components.py. Which ones should I replace with imports, and which should stay inline?", "eval_id": 2, "outputs": [{"name": "response.md", "type": "text", "content": "# Analysis: What to import vs. what to keep inline\n\nThe BERT script (`distill_advanced_bert.py`) has ten functions or classes that overlap with the shared library files.\n\n## Category 1: Replace with imports from `losses.py` (5 items)\n\n| In BERT script | In `losses.py` | Verdict |\n|---|---|---|\n| `kl_logits` (line 255) | `kl_logits_classification` (line 49) | Replace. Identical logic. |\n| `hidden_mse` (line 274) | `hidden_mse` (line 67) | Replace. Same signature, same loop. |\n| `attention_kl` (line 305) | `attention_kl` (line 97) | Replace. Same masking pattern. |\n| `rkd_loss` (line 418) | `rkd_loss_pooled` (line 192) | Replace. Same math. |\n| `build_layer_map` (line 217) | `build_layer_map` (line 236) | Replace. Shared adds input validation. |\n\n## Category 2: Replace with imports from `components.py` (4 items)\n\n| In BERT script | In `components.py` | Verdict |\n|---|---|---|\n| `HiddenProjector` (line 233) | `HiddenProjector` (line 19) | Replace. Same interface. |\n| `UncertaintyWeights` (line 465) | `UncertaintyWeights` (line 34) | Replace. Identical. |\n| `EMAModel` (line 490) | `EMAModel` (line 55) | Replace. Shared adds decay guard. |\n| `build_param_groups` (line 522) | `build_param_groups` (line 93) | Replace. Shared adds RMSNorm. |\n\n## Category 3: `minilm_relation_loss` \u00e2\u20ac\u201d partial replacement only\n\nTwo layers:\n- **BERT-specific orchestration** (must stay inline): Accessing `bert.encoder.layer[-1].attention.self`, running separate BERT encoder forward passes, calling `.query()/.key()/.value()`.\n- **Pure tensor math** (can be replaced): `reshape_to_relation_heads`, `relation_distribution`, and the KL computation \u00e2\u20ac\u201d all available in `losses.py`.\n\nRecommendation: Replace inner math with shared helpers but keep model-coupling logic inline.\n\n## Category 4: Stay inline (no shared equivalent)\n\nConfig, set_seed, tokenize, evaluate, model loading, training loop \u00e2\u20ac\u201d all script-specific.\n"}], "grading": {"expectations": [{"text": "Identifies at least 6 distinct functions or classes to replace with imports", "passed": true, "evidence": "Identifies 9 items: kl_logits, hidden_mse, attention_kl, rkd_loss, build_layer_map (Category 1, 5 items) + HiddenProjector, UncertaintyWeights, EMAModel, build_param_groups (Category 2, 4 items)"}, {"text": "Identifies minilm_relation_loss as should stay inline or be handled specially", "passed": true, "evidence": "Category 3 explicitly recommends keeping BERT-specific orchestration inline: 'BERT-specific orchestration (must stay inline)' while replacing inner tensor math with shared helpers"}, {"text": "Provides specific import statements (e.g., 'from advanced.losses import ...')", "passed": false, "evidence": "No specific import statements provided. The analysis says 'Replace' but does not give the actual import lines like 'from advanced.losses import kl_logits_classification as kl_logits'"}, {"text": "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue", "passed": false, "evidence": "Mentions 'Running separate BERT encoder forward passes' in the minilm_relation_loss description but does not call it out as a performance bug or mention the 1.5-2x throughput penalty"}, {"text": "Correctly distinguishes between items from losses.py vs components.py", "passed": true, "evidence": "Clear separation: Category 1 = losses.py, Category 2 = components.py, Category 3 = partial (minilm_relation_loss), Category 4 = stay inline"}], "summary": {"passed": 3, "failed": 2, "total": 5, "pass_rate": 0.6}, "timing": {"executor_duration_seconds": 50.5, "total_duration_seconds": 50.5}, "eval_feedback": {"suggestions": [{"assertion": "Provides specific import statements", "reason": "The baseline gave conceptual 'Replace' recommendations but never provided the actual Python import lines. The with-skill version did provide these, making it actionable without additional lookups."}], "overall": "Baseline performed well on structure (correctly categorizing items) but missed two key details: providing actual import syntax and flagging the duplicate forward pass as a separate performance concern. The skill adds these specific action items."}}}, {"id": "full-checklist-with_skill", "prompt": "What's the status of the advanced distillation project? Give me a checklist of everything that still needs to be done, ordered by priority.", "eval_id": 3, "outputs": [{"name": "response.md", "type": "text", "content": "# Advanced Distillation Project \u00e2\u20ac\u201d Status Report & Priority Checklist\n\n## Project Overview\n\nThe `advanced/` folder implements a five-signal knowledge distillation pipeline for causal LLMs (Qwen2.5-1.5B to Qwen2.5-0.5B) with a BERT classifier variant kept for comparison. The code is structurally sound \u00e2\u20ac\u201d it correctly implements six loss terms (logit KD, hidden-state MSE, attention-map KL, MiniLMv2 Q-relation KD, pooled RKD, and causal CE), includes gradient checkpointing, uncertainty-based loss balancing, EMA shadow weights, and early stopping. However, the project has known gaps across four priority levels.\n\n## Current State\n\n| Area | Status |\n|---|---|\n| **distill_advanced.py** (LLM pipeline) | Complete and functional, but missing startup validations |\n| **distill_advanced_bert.py** (BERT pipeline) | Functional but has ~300 lines of duplicated code from losses.py/components.py |\n| **losses.py** | Complete, pure tensor functions, no model coupling |\n| **components.py** | Complete, reusable torch components |\n| **advanced/__init__.py** | MISSING \u00e2\u20ac\u201d folder is an implicit namespace package |\n| **.gitignore** (repo root) | MISSING \u00e2\u20ac\u201d __pycache__/ appears in git status as untracked |\n| **Unit tests** | MISSING \u00e2\u20ac\u201d no tests/ directory exists |\n| **README-listed features** | NONE started \u00e2\u20ac\u201d all future work items remain unaddressed |\n\n---\n\n## Priority-Ordered Checklist\n\n### PRIORITY 1 \u00e2\u20ac\u201d Apply These Fixes Immediately (defensive, <5 min each)\n\nThese prevent silent runtime failures deep in training that waste significant time. Apply all four before making any other changes.\n\n#### [ ] 1.1 Validate `minilm_relation_heads` at startup\n- **File:** `E:\\Distillation\\advanced\\distill_advanced.py`\n- **Location:** After the model-info print block (after line ~286, the `print(f\"Layer map...\")` line)\n- **What to do:** Insert an assertion that `CFG.minilm_relation_heads` divides both teacher and student Q-hidden dims (1536 and 896 respectively). The gcd is 128, so valid values are divisors of 128: {1, 2, 4, 8, 16, 32, 64, 128}.\n- **Why:** Without this, `reshape_to_relation_heads()` in `losses.py:138` crashes with a `ValueError` after dataset loading, model init, and baseline eval \u00e2\u20ac\u201d wasting 5-10 minutes per failed run.\n\n#### [ ] 1.2 Validate attention outputs are available\n- **File:** `E:\\Distillation\\advanced\\distill_advanced.py`\n- **Location:** Same block as 1.1, below the minilm_relation_heads check\n- **What to do:** Assert that both `teacher.config._attn_implementation` and `student.config._attn_implementation` equal `\"eager\"`. The pipeline requires `attn_implementation=\"eager\"` to return attention weight tensors. If someone changes this to `\"sdpa\"` or `\"flash_attention_2\"` for throughput, `student_out.attentions` and `teacher_out.attentions` become `None`, causing `attention_kl()` to crash with an opaque TypeError in the first training step.\n- **Why:** Catches the misconfiguration before the first training step rather than after everything has been set up.\n\n#### [ ] 1.3 Create `advanced/__init__.py`\n- **File:** `E:\\Distillation\\advanced\\__init__.py` (create new)\n- **Content:** A minimal docstring: `\"\"\"Advanced multi-signal knowledge distillation pipeline.\"\"\"`\n- **Why:** Without it, `from advanced.losses import ...` fails. The folder is currently an implicit namespace package. Adding `__init__.py` makes it a proper Python package, enabling clean imports from other scripts and tests. This is also a prerequisite for the BERT refactor (Priority 3).\n\n#### [ ] 1.4 Add `.gitignore` for Python artifacts\n- **File:** `E:\\Distillation\\.gitignore` (create new at repo root)\n- **Content:**\n  ```\n  __pycache__/\n  *.pyc\n  *.pyo\n  *.pyd\n  .Python\n  *.so\n  *.egg-info/\n  dist/\n  build/\n  ```\n- **Why:** `__pycache__/` directories and `.pyc` files currently appear in `git status` as untracked (visible right now: `advanced/__pycache__/distill_advanced.cpython-311.pyc`). There is no `.gitignore` anywhere in the repo.\n\n---\n\n### PRIORITY 2 \u00e2\u20ac\u201d Unit Tests for `losses.py`\n\n#### [ ] 2.1 Create `advanced/tests/test_losses.py`\n- **File to create:** `E:\\Distillation\\advanced\\tests\\test_losses.py`\n- **Why:** The `losses.py` docstring explicitly claims functions are \"straightforward to unit-test with hand-computed expected values on tiny inputs\" and the README calls the BERT version a \"unit-test surface area\" \u00e2\u20ac\u201d but no tests exist. These functions are pure tensor math with no model coupling, so tests are genuinely easy to write and catch regressions when loss formulas change.\n- **What to test** (each on tiny tensors B=2, T=3, V=4, D=8 with hand-computed expected values):\n\n  | Function | What to verify |\n  |---|---|\n  | `kl_logits_per_token` | KL math against `F.kl_div` reference; verify T^2 scaling; test both forward and reverse KL; verify padding mask correctly excludes positions |\n  | `kl_logits_classification` | Same as above but on [B, C] classifier logits |\n  | `hidden_mse` | Create a mock HiddenProjector (identity or known weights); verify MSE = mean((proj(s) - t)^2); verify attention_mask excludes padding tokens |\n  | `attention_kl` | Known attention matrices; verify per-row re-normalization after key-masking; verify query-mask excludes padding queries |\n  | `minilm_relation_kl` | Verify relation-distribution softmax with/without padding keys; verify KL is averaged over relation_heads and query positions |\n  | `rkd_loss_pooled` | Known embeddings to hand-computed pairwise distances and triplet angles; verify both distance and angle terms return scalar |\n  | `rkd_loss_token_pool` | Verify mean-pooling over attention_mask produces correct pooled embeddings |\n  | `causal_ce_loss` | Verify shift logic: position i's logit predicts token i+1; verify ignore_index=-100 masks correctly |\n  | `build_layer_map` | Test all edge ratios: 1-to-1, 1-to-12, 2-to-12, 6-to-12, 12-to-12, 24-to-28; verify ValueError on non-positive inputs |\n  | `reshape_to_relation_heads` | Verify [B,T,D] to [B,H,T,D/H] permutation; verify ValueError when D % H != 0 |\n  | `relation_distribution` | Verify softmax sums to 1 over key dimension; verify padding keys produce near-zero probability |\n\n- **Tooling:** Use `pytest` conventions. Each test should be <20 lines and run on CPU.\n\n---\n\n### PRIORITY 3 \u00e2\u20ac\u201d Refactor `distill_advanced_bert.py`\n\nThis file (757 lines) has ~300 lines of functions and classes that are duplicated from `losses.py` and `components.py`.\n\n#### [ ] 3a: Replace duplicated code with imports from shared modules\n- **File:** `E:\\Distillation\\advanced\\distill_advanced_bert.py`\n- **Replacements:**\n\n  | Lines to Remove | Function/Class | Replace With |\n  |---|---|---|\n  | 217-223 | `build_layer_map` | `from advanced.losses import build_layer_map` |\n  | 233-244 | `HiddenProjector` class | `from advanced.components import HiddenProjector` |\n  | 255-271 | `kl_logits` function | `from advanced.losses import kl_logits_classification as kl_logits` |\n  | 274-302 | `hidden_mse` function | `from advanced.losses import hidden_mse` |\n  | 305-339 | `attention_kl` function | `from advanced.losses import attention_kl` |\n  | 464-483 | `UncertaintyWeights` class | `from advanced.components import UncertaintyWeights` |\n  | 489-514 | `EMAModel` class | `from advanced.components import EMAModel` |\n  | 521-542 | `build_param_groups` function | `from advanced.components import build_param_groups` |\n\n- **Keep inline (deliberately different from shared version):**\n  - `minilm_relation_loss` (lines 342-415) \u00e2\u20ac\u201d BERT uses Q+K+V (full MHA) with a separate forward pass. The shared `minilm_relation_kl` in losses.py is Q-only (for GQA models). These are different enough that sharing doesn't help.\n  - `rkd_loss` (lines 418-461) \u00e2\u20ac\u201d BERT uses [CLS] token (position 0), shared version uses `rkd_loss_pooled` on arbitrary pooled embeddings. Can optionally replace with `rkd_loss_pooled(s_cls, t_cls)` from losses.py.\n\n- **Prerequisite:** Priority 1.3 (__init__.py must exist).\n\n#### [ ] 3b: Fix BERT MiniLMv2 duplicate forward pass\n- **File:** `E:\\Distillation\\advanced\\distill_advanced_bert.py`\n- **Lines:** 366-377\n- **What to do:** The `minilm_relation_loss` function re-runs the BERT encoder (`teacher_model.bert(...)` and `student_model.bert(...)`) to get last-layer hidden states. The main training loop already has these from `student_out.hidden_states` and `teacher_out.hidden_states`. This double-pass costs 1.5-2x throughput.\n- **Solution:** Follow the pattern from `_qwen_last_q` in `distill_advanced.py` (lines 304-315). Change the function signature to accept `student_hidden_states` and `teacher_hidden_states` tuples instead of `input_ids`, and extract `hidden_states[-2]` (the input to the last transformer block). Apply the last layer's attention projections to that cached tensor.\n- **Why:** Eliminates the duplicate encoder forward pass, roughly doubling throughput for the MiniLMv2 loss term.\n\n---\n\n### PRIORITY 4 \u00e2\u20ac\u201d Future Work (design decisions required, multi-day each)\n\nThese are larger efforts referenced in `README.md:83-89` or discovered during audit. They require design discussion before implementation.\n\n#### [ ] 4a: Generalize `_qwen_last_q` beyond Qwen2\n- **File:** `E:\\Distillation\\advanced\\distill_advanced.py`, lines 304-315\n- **What to do:** The function hardcodes Qwen2 internals: `model.model.layers[-1]`, `.input_layernorm`, `.self_attn.q_proj`. To support Llama, GPT-NeoX, or other architectures, add an architecture-detection dispatch. Llama uses the same `input_layernorm` naming but a different `.model.` path; other models differ more.\n\n#### [ ] 4b: Standardize `optimizer.zero_grad(set_to_none=True)`\n- **Files:** `E:\\Distillation\\advanced\\distill_advanced.py` (already uses `set_to_none=True`) and `E:\\Distillation\\advanced\\distill_advanced_bert.py` (uses default `set_to_none=False`)\n- **What to do:** Change `distill_advanced_bert.py` to use `set_to_none=True` for consistency and lower peak memory.\n\n#### [ ] 4c: README-listed features\n- **Source:** `README.md:83-89`\n- **Features (each multi-day):**\n\n  | Feature | Description | Effort |\n  |---|---|---|\n  | **On-policy / GKD** | Sample from student during training, score with teacher. Replaces offline KL with on-policy distributions for better mode coverage. | Large |\n  | **Sequence-level distillation** | Generate teacher continuations offline, train student on those completions rather than next-token matching. | Large |\n  | **DPO/preference distillation** | Match teacher preferences over completions \u00e2\u20ac\u201d useful when the teacher was RLHF-trained. | Large |\n  | **TAKD** | Insert a 0.7B teacher-assistant when the 1.5B-to-0.5B capacity gap causes instability. | Large |\n  | **LoRA on student** | Use low-rank adaptation instead of full fine-tuning \u00e2\u20ac\u201d needed for students too large to fully finetune. | Medium |\n\n---\n\n## Recommendation\n\n**Immediate (Priority 1):** Apply Fixes 1.1-1.4 before any training runs. These take <20 minutes total and prevent expensive silent failures.\n\n**Short-term (Priority 2-3):** Write the unit tests for `losses.py` (straightforward given the pure-function design) and refactor the BERT file to eliminate the duplicated code and the 1.5-2x throughput regression in its MiniLMv2 forward pass.\n\n**Long-term (Priority 4):** Pursue the future features once Priorities 1-3 are complete, as these require design discussion and are multi-day efforts.\n\n## Files Summary\n\n| File | Path | Lines | Notes |\n|---|---|---|---|\n| Main LLM script | `E:\\Distillation\\advanced\\distill_advanced.py` | 577 | Needs Fixes 1.1, 1.2; generalization 4a |\n| BERT script | `E:\\Distillation\\advanced\\distill_advanced_bert.py` | 757 | Needs refactor 3a, 3b; standardize 4b |\n| Loss functions | `E:\\Distillation\\advanced\\losses.py` | 247 | Needs unit tests (Priority 2) |\n| Components | `E:\\Distillation\\advanced\\components.py` | 116 | Already clean |\n| __init__.py | `E:\\Distillation\\advanced\\__init__.py` | MISSING | Needs creation (Fix 1.3) |\n| .gitignore | `E:\\Distillation\\.gitignore` | MISSING | Needs creation (Fix 1.4) |\n| Skill file | `E:\\Distillation\\advanced\\SKILL.md` | 290 | Already complete \u00e2\u20ac\u201d the source of truth for all fixes |\n| README | `E:\\Distillation\\advanced\\README.md` | 98 | User-facing docs; already accurate |\n| Evals | `E:\\Distillation\\advanced\\evals\\evals.json` | 23 | Contains eval #3 matching this exact prompt |\n"}], "grading": {"expectations": [{"text": "Has at least 4 distinct priority levels or numbered sections", "passed": true, "evidence": "Four clearly labeled Priority sections: PRIORITY 1 (defensive fixes), PRIORITY 2 (unit tests), PRIORITY 3 (BERT refactor), PRIORITY 4 (future work)"}, {"text": "Covers the defensive fixes: minilm_relation_heads validation, attention check, __init__.py, .gitignore", "passed": true, "evidence": "Priority 1 checklist items 1.1-1.4 explicitly cover all four: minilm_relation_heads validation, attention output validation, __init__.py creation, and .gitignore creation, each with file paths, line numbers, and code content"}, {"text": "Covers unit tests as a missing item", "passed": true, "evidence": "Priority 2 section: 'Create advanced/tests/test_losses.py' with table of 11 functions to test, each with specific verification criteria"}, {"text": "Covers the BERT refactor including code duplication and MiniLMv2 forward pass", "passed": true, "evidence": "Priority 3 sections 3a and 3b: 8 replacement items with exact line ranges and import statements, plus MiniLMv2 duplicate forward pass fix with signature change instructions"}, {"text": "Covers future features from README (GKD, sequence-level, DPO, TAKD, LoRA or similar)", "passed": true, "evidence": "Priority 4c lists all five README features: GKD, Sequence-level distillation, DPO/Preference distillation, TAKD, LoRA on student \u00e2\u20ac\u201d each with description and effort estimate"}, {"text": "Items are ordered by priority: quick fixes first, future features last", "passed": true, "evidence": "Structured as P1 (immediate/defensive) \u00e2\u2020\u2019 P2 (tests) \u00e2\u2020\u2019 P3 (refactor) \u00e2\u2020\u2019 P4 (future/design), with explicit 'Recommendation' section confirming the ordering rationale"}, {"text": "References specific file paths in the advanced/ folder", "passed": true, "evidence": "Every checklist item includes full paths: 'E:\\Distillation\\advanced\\distill_advanced.py', 'E:\\Distillation\\advanced\\__init__.py', 'E:\\Distillation\\advanced\\tests\\test_losses.py', with line numbers"}], "summary": {"passed": 7, "failed": 0, "total": 7, "pass_rate": 1.0}, "timing": {"executor_duration_seconds": 74.7, "total_duration_seconds": 74.7}, "eval_feedback": {"suggestions": [], "overall": "Perfect score. The with-skill run produced a comprehensive, well-organized, actionable checklist that directly mirrors the skill's structure while adding useful metadata (effort estimates, dependency notes, blocker section)."}}}, {"id": "full-checklist-without_skill", "prompt": "What's the status of the advanced distillation project? Give me a checklist of everything that still needs to be done, ordered by priority.", "eval_id": 3, "outputs": [{"name": "response.md", "type": "text", "content": "# Advanced Distillation Project -- Status Report and Priority Checklist\n\n## Project Summary\n\nThe advanced distillation folder (`advanced/`) implements a five-signal knowledge distillation pipeline for causal LLMs (Qwen2.5-1.5B teacher -> Qwen2.5-0.5B student), with a BERT classifier variant kept for comparison. The code is structurally sound, implements five complementary distillation signals (logit KD, hidden-state matching, attention-map KD, MiniLMv2 Q-relation KD, and pooled RKD) plus a full engineering toolbox (EMA, uncertainty loss balancing, gradient checkpointing, gradient accumulation, early stopping, etc.). The main scripts are feature-complete and ready for training, but several known gaps and bugs still need attention.\n\n## Current Status\n\n**Done:**\n- Main LLM distillation script (`distill_advanced.py`, 577 lines) -- fully functional\n- BERT classifier distillation script (`distill_advanced_bert.py`, 757 lines) -- fully functional but duplicated code\n- Shared loss functions (`losses.py`, 248 lines) -- clean, model-agnostic tensor functions\n- Shared components (`components.py`, 117 lines) -- HiddenProjector, UncertaintyWeights, EMAModel, build_param_groups\n- User-facing documentation (`README.md`) covering all five signals, configuration knobs, VRAM estimates, and planned features\n- Developer skill guide (`SKILL.md`) with detailed fixes for every known issue\n- Eval framework metadata (`evals/evals.json`) with three evaluation cases defined\n\n**Not done (all items below):**\n\n---\n\n## Priority 1 -- Quick Defensive Fixes (estimated <20 min total)\n\nThese prevent silent runtime failures deep in training that waste GPU time.\n\n- [ ] **1a. Validate `minilm_relation_heads` at startup**\n  - File: `distill_advanced.py`\n  - The `reshape_to_relation_heads()` call in `losses.py:137` crashes with `ValueError` if `minilm_relation_heads` doesn't divide both Q-hidden-dims. This crash happens after dataset loading, model init, and baseline eval.\n  - Insert validation after the layer-map print block (~line 291) checking both teacher_hidden % CFG.minilm_relation_heads == 0 and student_hidden % CFG.minilm_relation_heads == 0.\n  - Valid values: divisors of gcd(1536, 896)=128, i.e. {1,2,4,8,16,32,64,128}. Default (64) is valid.\n\n- [ ] **1b. Validate attention outputs are available**\n  - File: `distill_advanced.py`\n  - The script requires `attn_implementation=\"eager\"` to return attention weights. If changed to `\"sdpa\"` or `\"flash_attention_2\"`, `student_out.attentions` and `teacher_out.attentions` become `None`, and `attention_kl()` crashes with an opaque TypeError.\n  - Insert checks that `teacher.config._attn_implementation == \"eager\"` and `student.config._attn_implementation == \"eager\"` alongside the minilm validation (~line 291).\n\n- [ ] **1c. Create `advanced/__init__.py`**\n  - File: `advanced/__init__.py` (does not exist -- directory is currently an implicit namespace package)\n  - Without it, `from advanced.losses import ...` will fail from outside the `advanced/` context. The BERT refactor (Priority 3) depends on this.\n  - Content: a simple docstring `\"\"\"Advanced multi-signal knowledge distillation pipeline.\"\"\"`\n\n- [ ] **1d. Add `.gitignore`**\n  - File: `.gitignore` at the repo root (does not exist anywhere in the repo)\n  - `__pycache__/` directories and `.pyc` files show in `git status` as untracked.\n  - Content: `__pycache__/`, `*.pyc`, `*.pyo`, `*.pyd`, `.Python`, `*.so`, `*.egg-info/`, `dist/`, `build/`\n\n---\n\n## Priority 2 -- Unit Tests for `losses.py`\n\n- [ ] **2. Create `advanced/tests/test_losses.py`**\n  - The `losses.py` docstring explicitly says functions are \"straightforward to unit-test with hand-computed expected values on tiny inputs\" and the README calls the BERT version a \"unit-test surface area\" -- but no tests exist.\n  - These are pure tensor functions with no model coupling, so tests are easy to write and catch regressions.\n  - Functions to test (use pytest, B=2, T=3, V=4, D=8 tiny tensors, run on CPU):\n\n| Function | What to verify |\n|---|---|\n| `kl_logits_per_token` | KL math against `F.kl_div` reference; T^2 scaling; forward and reverse KL; padding mask correctness |\n| `kl_logits_classification` | Same as above but on [B, C] logits |\n| `hidden_mse` | Mock `HiddenProjector` (identity/known weights); verify mask excludes padding |\n| `attention_kl` | Known attention matrices; per-row re-normalization after key-masking |\n| `minilm_relation_kl` | Relation-distribution softmax with/without padding keys; averaging over heads and queries |\n| `rkd_loss_pooled` | Hand-computed pairwise distances and triplet angles; verify both terms return scalar |\n| `rkd_loss_token_pool` | Verify mean-pooling over attention mask produces correct embeddings |\n| `causal_ce_loss` | Verify i->i+1 shift logic; ignore_index=-100 masking |\n| `build_layer_map` | Test edge ratios: 1->1, 1->12, 2->12, 6->12, 12->12, 24->28; ValueError on non-positive |\n| `reshape_to_relation_heads` | [B,T,D] -> [B,H,T,D/H] permutation; ValueError when D % H != 0 |\n| `relation_distribution` | Softmax sums to 1 over keys; padding keys produce near-zero probability |\n\n---\n\n## Priority 3 -- Refactor `distill_advanced_bert.py`\n\n- [ ] **3a. Replace duplicated code with imports from shared modules**\n  - The BERT script defines ~300 lines of functions and classes that already exist in `losses.py` and `components.py`. Replace each with an import so bug fixes don't propagate separately.\n  - Replacements (remove inline, add import):\n\n| Remove (lines) | Add import |\n|---|---|\n| `build_layer_map` (217-223) | `from advanced.losses import build_layer_map` |\n| `HiddenProjector` class (233-244) | `from advanced.components import HiddenProjector` |\n| `kl_logits` function (255-271) | `from advanced.losses import kl_logits_classification as kl_logits` |\n| `hidden_mse` function (274-302) | `from advanced.losses import hidden_mse` |\n| `attention_kl` function (305-339) | `from advanced.losses import attention_kl` |\n| `UncertaintyWeights` class (464-483) | `from advanced.components import UncertaintyWeights` |\n| `EMAModel` class (489-514) | `from advanced.components import EMAModel` |\n| `build_param_groups` function (521-542) | `from advanced.components import build_param_groups` |\n\n  - Keep inline: `minilm_relation_loss` (342-415) because BERT uses Q+K+V (full MHA) with a separate forward pass, which is different from the Q-only `minilm_relation_kl` in `losses.py`. `rkd_loss` (418-461) can optionally stay or be replaced with `rkd_loss_pooled(s_cls, t_cls)`.\n\n  - Depends on Priority 1c (`advanced/__init__.py` existing) for clean imports.\n\n- [ ] **3b. Fix BERT MiniLMv2 duplicate forward pass**\n  - Lines 366-377 in `distill_advanced_bert.py` re-run the BERT encoder to get last-layer hidden states. The main training loop already has these from `student_out.hidden_states` and `teacher_out.hidden_states`.\n  - Refactor `minilm_relation_loss` signature to accept cached `hidden_states` tuples instead of `input_ids`, reusing `hidden_states[-2]` (the input to the last transformer block). This eliminates a 1.5-2x throughput cost.\n  - Follow the same pattern used by `_qwen_last_q` in `distill_advanced.py` (lines 304-315).\n\n---\n\n## Priority 4 -- Future Work (larger efforts, multi-day)\n\n- [ ] **4a. Generalize `_qwen_last_q` beyond Qwen2**\n  - `distill_advanced.py:304-315` hardcodes Qwen2 internals (`model.model.layers[-1]`, `.input_layernorm`, `.self_attn.q_proj`). Add architecture-detection dispatch to support Llama, GPT-NeoX, or other architectures.\n\n- [ ] **4b. Standardize `optimizer.zero_grad(set_to_none=True)`**\n  - `distill_advanced.py` uses `set_to_none=True` (more memory-efficient) while `distill_advanced_bert.py` uses default `set_to_none=False` at line 601. Standardize on `True` in both scripts.\n\n- [ ] **4c. On-policy / Generalized Knowledge Distillation (GKD)**\n  - Sample from the student during training, score with teacher logits. Replaces offline KL with on-policy distributions for better mode coverage. (Referenced in README.md:83)\n\n- [ ] **4d. Sequence-level distillation**\n  - Generate teacher continuations offline, train the student on those completions rather than next-token matching. (Referenced in README.md:84)\n\n- [ ] **4e. DPO / Preference distillation**\n  - Match teacher preferences over completions -- useful when the teacher was RLHF-trained. (Referenced in README.md:85)\n\n- [ ] **4f. Teacher-Assistant Knowledge Distillation (TAKD)**\n  - Insert a 0.7B teacher-assistant when the 1.5B -> 0.5B capacity gap causes instability. (Referenced in README.md:86)\n\n- [ ] **4g. LoRA on the student**\n  - Use low-rank adaptation instead of full fine-tuning -- needed for students too large to fully finetune. (Referenced in README.md:87)\n\n---\n\n## Blockers / Dependencies\n\n- Priority 1 items have no dependencies -- can be done in any order and validated independently.\n- Priority 3a (BERT dedup imports) depends on Priority 1c (`advanced/__init__.py` being created).\n- Priority 3a and 3b should be done together to avoid conflicting edits on `distill_advanced_bert.py`.\n- Priority 2 (tests) and Priority 4 have no dependencies on other items.\n- Recommendation: apply Priority 1 items first (including the standalone 1c and 1d), then tackle Priority 3 and Priority 2 in parallel, then discuss Priority 4 at a design level.\n"}], "grading": {"expectations": [{"text": "Has at least 4 distinct priority levels or numbered sections", "passed": true, "evidence": "Four Priority sections: Priority 1 (Quick Defensive Fixes), Priority 2 (Unit Tests), Priority 3 (Refactor distill_advanced_bert.py), Priority 4 (Future Work)"}, {"text": "Covers the defensive fixes: minilm_relation_heads validation, attention check, __init__.py, .gitignore", "passed": true, "evidence": "Priority 1 items 1a-1d cover all four: minilm_relation_heads validation, attention output validation, __init__.py creation, and .gitignore addition"}, {"text": "Covers unit tests as a missing item", "passed": true, "evidence": "Priority 2 section with table of 11 functions to test, each with specific verification criteria"}, {"text": "Covers the BERT refactor including code duplication and MiniLMv2 forward pass", "passed": true, "evidence": "Priority 3 items 3a and 3b: 8 replacement items with exact line ranges and import paths, plus MiniLMv2 duplicate forward pass fix with instructions to follow _qwen_last_q pattern"}, {"text": "Covers future features from README (GKD, sequence-level, DPO, TAKD, LoRA or similar)", "passed": true, "evidence": "Priority 4 items 4c-4g explicitly list: GKD, Sequence-level distillation, DPO/Preference distillation, TAKD, LoRA on student"}, {"text": "Items are ordered by priority: quick fixes first, future features last", "passed": true, "evidence": "Clear P1\u00e2\u2020\u2019P2\u00e2\u2020\u2019P3\u00e2\u2020\u2019P4 ordering with explicit 'Blockers/Dependencies' section confirming: 'Priority 1 items have no dependencies \u00e2\u20ac\u201d can be done in any order'"}, {"text": "References specific file paths in the advanced/ folder", "passed": true, "evidence": "Most items include file paths: 'distill_advanced.py', 'advanced/__init__.py', 'advanced/tests/test_losses.py', 'distill_advanced_bert.py'"}], "summary": {"passed": 7, "failed": 0, "total": 7, "pass_rate": 1.0}, "timing": {"executor_duration_seconds": 59.1, "total_duration_seconds": 59.1}, "eval_feedback": {"suggestions": [{"assertion": "References specific file paths", "reason": "File paths are relative (e.g., 'distill_advanced.py') rather than absolute (e.g., 'E:\\Distillation\\advanced\\distill_advanced.py'). The with-skill version used absolute paths which are more actionable. Minor difference, not worth failing."}], "overall": "Surprisingly strong baseline \u00e2\u20ac\u201d the without_skill run produced a checklist nearly as comprehensive as the with_skill version. The main difference is the with_skill version includes dependency/blocker analysis and absolute paths. This eval may not strongly discriminate skill quality for checklist-style requests since both approaches produce similar outputs when given access to the same codebase."}}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "advanced-distillation-dev", "skill_path": "E:\\Distillation\\advanced\\SKILL.md", "executor_model": "deepseek-v4-pro", "analyzer_model": "deepseek-v4-pro", "timestamp": "2026-06-03T17:30:00Z", "evals_run": [1, 2, 3], "runs_per_configuration": 1}, "runs": [{"eval_id": 1, "eval_name": "quick-fixes", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 44.8, "tokens": 30615, "tool_calls": 10, "errors": 0}, "expectations": [{"text": "Mentions minilm_relation_heads startup validation as a needed fix", "passed": true, "evidence": "Section '1. Validate minilm_relation_heads at startup' with full code fix"}, {"text": "Mentions attention output / attn_implementation validation as a needed fix", "passed": true, "evidence": "Section '2. Validate attention outputs are available' with code"}, {"text": "Mentions missing __init__.py or namespace package issue", "passed": true, "evidence": "Section '3. Missing advanced/__init__.py'"}, {"text": "Mentions missing .gitignore or __pycache__ pollution", "passed": true, "evidence": "Section '4. Missing .gitignore at repo root'"}, {"text": "Provides specific code snippets or exact fix instructions", "passed": true, "evidence": "All four fixes include complete executable Python code blocks"}, {"text": "References specific file paths and approximate line numbers", "passed": true, "evidence": "References line 128, line 291, lines 238, 267"}], "notes": []}, {"eval_id": 1, "eval_name": "quick-fixes", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.33, "passed": 2, "failed": 4, "total": 6, "time_seconds": 334.0, "tokens": 66208, "tool_calls": 14, "errors": 0}, "expectations": [{"text": "Mentions minilm_relation_heads startup validation as a needed fix", "passed": false, "evidence": "Focuses on CUDA/CPU issues, attention_mask=None, pad_token=EOS \u00e2\u20ac\u201d never mentions minilm_relation_heads"}, {"text": "Mentions attention output / attn_implementation validation as a needed fix", "passed": false, "evidence": "Does not mention eager attention requirement"}, {"text": "Mentions missing __init__.py or namespace package issue", "passed": false, "evidence": "No mention of __init__.py"}, {"text": "Mentions missing .gitignore or __pycache__ pollution", "passed": false, "evidence": "No mention of .gitignore"}, {"text": "Provides specific code snippets or exact fix instructions", "passed": true, "evidence": "Provides code for attention_mask fallback, loss_balancer conditional, save_dir pathlib fix"}, {"text": "References specific file paths and approximate line numbers", "passed": true, "evidence": "References lines 304-315, 376, 426-428, 182, 148, 91"}], "notes": []}, {"eval_id": 2, "eval_name": "bert-refactor", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 56.5, "tokens": 34771, "tool_calls": 7, "errors": 0}, "expectations": [{"text": "Identifies at least 6 distinct functions or classes to replace with imports", "passed": true, "evidence": "Lists 8 items plus rkd_loss as optional 9th"}, {"text": "Identifies minilm_relation_loss as should stay inline or be handled specially", "passed": true, "evidence": "STRONGLY KEEP INLINE with detailed Q+K+V vs Q-only comparison table"}, {"text": "Provides specific import statements", "passed": true, "evidence": "Exact imports: 'from advanced.losses import kl_logits_classification as kl_logits'"}, {"text": "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue", "passed": true, "evidence": "Explicitly notes '1.5-2x throughput cost' for lines 366-377"}, {"text": "Correctly distinguishes between items from losses.py vs components.py", "passed": true, "evidence": "Clear separation with losses.py vs components.py columns in summary table"}], "notes": []}, {"eval_id": 2, "eval_name": "bert-refactor", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.6, "passed": 3, "failed": 2, "total": 5, "time_seconds": 50.5, "tokens": 29777, "tool_calls": 5, "errors": 0}, "expectations": [{"text": "Identifies at least 6 distinct functions or classes to replace with imports", "passed": true, "evidence": "Identifies 9 items across Category 1 (5) and Category 2 (4)"}, {"text": "Identifies minilm_relation_loss as should stay inline or be handled specially", "passed": true, "evidence": "Category 3: 'BERT-specific orchestration (must stay inline)'"}, {"text": "Provides specific import statements", "passed": false, "evidence": "Says 'Replace' conceptually but never provides the actual Python import lines"}, {"text": "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue", "passed": false, "evidence": "Mentions separate forward passes in description but does not flag as performance bug"}, {"text": "Correctly distinguishes between items from losses.py vs components.py", "passed": true, "evidence": "Category 1 = losses.py, Category 2 = components.py"}], "notes": []}, {"eval_id": 3, "eval_name": "full-checklist", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 7, "failed": 0, "total": 7, "time_seconds": 74.7, "tokens": 37963, "tool_calls": 22, "errors": 0}, "expectations": [{"text": "Has at least 4 distinct priority levels or numbered sections", "passed": true, "evidence": "Four Priority sections labeled 1-4 with clear subsection numbering"}, {"text": "Covers the defensive fixes: minilm_relation_heads validation, attention check, __init__.py, .gitignore", "passed": true, "evidence": "Items 1.1-1.4 cover all four with file paths, line numbers, and code snippets"}, {"text": "Covers unit tests as a missing item", "passed": true, "evidence": "Priority 2 with table of 11 functions and specific verification criteria"}, {"text": "Covers the BERT refactor including code duplication and MiniLMv2 forward pass", "passed": true, "evidence": "Items 3a (8 replacements with line ranges) and 3b (signature change instructions)"}, {"text": "Covers future features from README (GKD, sequence-level, DPO, TAKD, LoRA)", "passed": true, "evidence": "Item 4c lists all five with descriptions and effort estimates"}, {"text": "Items are ordered by priority: quick fixes first, future features last", "passed": true, "evidence": "Structured P1\u00e2\u2020\u2019P2\u00e2\u2020\u2019P3\u00e2\u2020\u2019P4 with explicit Recommendation section"}, {"text": "References specific file paths in the advanced/ folder", "passed": true, "evidence": "Every item includes full paths with line numbers"}], "notes": []}, {"eval_id": 3, "eval_name": "full-checklist", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 7, "failed": 0, "total": 7, "time_seconds": 59.1, "tokens": 44807, "tool_calls": 26, "errors": 0}, "expectations": [{"text": "Has at least 4 distinct priority levels or numbered sections", "passed": true, "evidence": "Four Priority sections with checkbox formatting [ ]"}, {"text": "Covers the defensive fixes: minilm_relation_heads validation, attention check, __init__.py, .gitignore", "passed": true, "evidence": "Items 1a-1d cover all four with file paths and code content"}, {"text": "Covers unit tests as a missing item", "passed": true, "evidence": "Priority 2 with table of 11 functions and verification criteria"}, {"text": "Covers the BERT refactor including code duplication and MiniLMv2 forward pass", "passed": true, "evidence": "Items 3a (8 replacements with line ranges) and 3b (signature change following _qwen_last_q pattern)"}, {"text": "Covers future features from README (GKD, sequence-level, DPO, TAKD, LoRA)", "passed": true, "evidence": "Items 4c-4g explicitly list all five README features"}, {"text": "Items are ordered by priority: quick fixes first, future features last", "passed": true, "evidence": "P1\u00e2\u2020\u2019P2\u00e2\u2020\u2019P3\u00e2\u2020\u2019P4 with explicit Blockers/Dependencies section"}, {"text": "References specific file paths in the advanced/ folder", "passed": true, "evidence": "File paths throughout, though relative rather than absolute"}], "notes": []}], "run_summary": {"with_skill": {"pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0}, "time_seconds": {"mean": 58.7, "stddev": 15.1, "min": 44.8, "max": 74.7}, "tokens": {"mean": 34450, "stddev": 3674, "min": 30615, "max": 37963}}, "without_skill": {"pass_rate": {"mean": 0.643, "stddev": 0.34, "min": 0.33, "max": 1.0}, "time_seconds": {"mean": 147.9, "stddev": 163.5, "min": 50.5, "max": 334.0}, "tokens": {"mean": 46931, "stddev": 18298, "min": 29777, "max": 66208}}, "delta": {"pass_rate": "+0.36", "time_seconds": "-89.2", "tokens": "-12481"}}, "notes": ["Eval 3 (full-checklist) shows no discrimination \u00e2\u20ac\u201d both with_skill and without_skill scored 100%. The checklist task is too broad; adding the skill doesn't change output quality when the agent already has access to the same codebase.", "Eval 1 (quick-fixes) shows the strongest discrimination: with_skill=100% vs without_skill=33%. The skill adds specific knowledge about startup validation checks that a general code audit misses.", "with_skill runs are consistently faster and use fewer tokens than without_skill runs, suggesting the skill helps agents focus on the right issues without extensive code exploration."]}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

@@ -290,6 +290,25 @@ print(
 LAYER_MAP = build_layer_map(student_layers, teacher_layers)
 print(f"  Layer map (student → teacher): {list(enumerate(LAYER_MAP))}")
 
+# Validate MiniLMv2 relation_heads before training.
+if CFG.minilm_relation_heads > 0:
+    assert teacher_hidden % CFG.minilm_relation_heads == 0, (
+        f"minilm_relation_heads ({CFG.minilm_relation_heads}) must divide "
+        f"teacher hidden size ({teacher_hidden})"
+    )
+    assert student_hidden % CFG.minilm_relation_heads == 0, (
+        f"minilm_relation_heads ({CFG.minilm_relation_heads}) must divide "
+        f"student hidden size ({student_hidden})"
+    )
+
+# Guard: eager attention is required for attention-map KD.
+# sdpa / flash_attention_2 do not return attention weights.
+assert teacher.config._attn_implementation == "eager", (
+    "teacher must use attn_implementation='eager' to return attention weights"
+)
+assert student.config._attn_implementation == "eager", (
+    "student must use attn_implementation='eager' to return attention weights"
+)
 
 # ── Hidden-state projection heads (student dim → teacher dim) ─────────────────
 hidden_proj = HiddenProjector(

@@ -1,0 +1,23 @@
+{
+  "skill_name": "advanced-distillation-dev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm working in the advanced/ folder of the distillation project. Can you look at distill_advanced.py and tell me what needs to be fixed before I start training?",
+      "expected_output": "Identifies the missing startup validation checks (minilm_relation_heads and attention outputs) and provides the exact code to add. Prioritizes the quick defensive fixes.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Look at advanced/distill_advanced_bert.py and advanced/losses.py. The BERT script has a bunch of functions that are already in losses.py and components.py. Which ones should I replace with imports, and which should stay inline?",
+      "expected_output": "Lists the 8 items to replace with imports (build_layer_map, HiddenProjector, kl_logits, hidden_mse, attention_kl, UncertaintyWeights, EMAModel, build_param_groups) and identifies minilm_relation_loss and rkd_loss as cases to keep inline or handle carefully. Provides specific import lines.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "What's the status of the advanced distillation project? Give me a checklist of everything that still needs to be done, ordered by priority.",
+      "expected_output": "Organized checklist covering all 4 priority levels: quick defensive fixes (validation, __init__.py, .gitignore), unit tests, BERT refactor (dedup + MiniLMv2 forward pass fix), and future features (generalization, zero_grad, README features). Each item has a specific file and line reference.",
+      "files": []
+    }
+  ]
+}

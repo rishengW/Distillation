@@ -1,0 +1,14 @@
+{
+  "eval_id": 3,
+  "eval_name": "full-checklist",
+  "prompt": "What's the status of the advanced distillation project? Give me a checklist of everything that still needs to be done, ordered by priority.",
+  "assertions": [
+    "Has at least 4 distinct priority levels or numbered sections",
+    "Covers the defensive fixes: minilm_relation_heads validation, attention check, __init__.py, .gitignore",
+    "Covers unit tests as a missing item",
+    "Covers the BERT refactor including code duplication and MiniLMv2 forward pass",
+    "Covers future features from README (GKD, sequence-level, DPO, TAKD, LoRA or similar)",
+    "Items are ordered by priority: quick fixes first, future features last",
+    "References specific file paths in the advanced/ folder"
+  ]
+}

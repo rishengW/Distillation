@@ -1,0 +1,37 @@
+{
+  "expectations": [
+    {
+      "text": "Mentions minilm_relation_heads startup validation as a needed fix",
+      "passed": true,
+      "evidence": "Section '1. Validate minilm_relation_heads at startup' with full code fix: 'if CFG.minilm_relation_heads > 0: assert teacher_hidden % CFG.minilm_relation_heads == 0'"
+    },
+    {
+      "text": "Mentions attention output / attn_implementation validation as a needed fix",
+      "passed": true,
+      "evidence": "Section '2. Validate attention outputs are available' with code: 'assert teacher.config._attn_implementation == \"eager\"'"
+    },
+    {
+      "text": "Mentions missing __init__.py or namespace package issue",
+      "passed": true,
+      "evidence": "Section '3. Missing advanced/__init__.py' with fix: create file with docstring content"
+    },
+    {
+      "text": "Mentions missing .gitignore or __pycache__ pollution",
+      "passed": true,
+      "evidence": "Section '4. Missing .gitignore at repo root' with full gitignore content"
+    },
+    {
+      "text": "Provides specific code snippets or exact fix instructions (not just high-level description)",
+      "passed": true,
+      "evidence": "All four fixes include complete executable Python code blocks and gitignore content"
+    },
+    {
+      "text": "References specific file paths and approximate line numbers",
+      "passed": true,
+      "evidence": "References 'line 128', 'line 291', 'lines 238, 267', 'line 288', specific file paths like 'E:\\Distillation\\advanced\\distill_advanced.py'"
+    }
+  ],
+  "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0},
+  "timing": {"executor_duration_seconds": 44.8, "total_duration_seconds": 44.8},
+  "eval_feedback": {"suggestions": [], "overall": "All assertions pass. The with-skill run precisely covers every item from the skill's Priority 1 checklist with exact code snippets."}
+}

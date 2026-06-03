@@ -1,0 +1,40 @@
+{
+  "expectations": [
+    {
+      "text": "Identifies at least 6 distinct functions or classes to replace with imports",
+      "passed": true,
+      "evidence": "Identifies 9 items: kl_logits, hidden_mse, attention_kl, rkd_loss, build_layer_map (Category 1, 5 items) + HiddenProjector, UncertaintyWeights, EMAModel, build_param_groups (Category 2, 4 items)"
+    },
+    {
+      "text": "Identifies minilm_relation_loss as should stay inline or be handled specially",
+      "passed": true,
+      "evidence": "Category 3 explicitly recommends keeping BERT-specific orchestration inline: 'BERT-specific orchestration (must stay inline)' while replacing inner tensor math with shared helpers"
+    },
+    {
+      "text": "Provides specific import statements (e.g., 'from advanced.losses import ...')",
+      "passed": false,
+      "evidence": "No specific import statements provided. The analysis says 'Replace' but does not give the actual import lines like 'from advanced.losses import kl_logits_classification as kl_logits'"
+    },
+    {
+      "text": "Mentions the BERT MiniLMv2 duplicate forward pass as a separate performance issue",
+      "passed": false,
+      "evidence": "Mentions 'Running separate BERT encoder forward passes' in the minilm_relation_loss description but does not call it out as a performance bug or mention the 1.5-2x throughput penalty"
+    },
+    {
+      "text": "Correctly distinguishes between items from losses.py vs components.py",
+      "passed": true,
+      "evidence": "Clear separation: Category 1 = losses.py, Category 2 = components.py, Category 3 = partial (minilm_relation_loss), Category 4 = stay inline"
+    }
+  ],
+  "summary": {"passed": 3, "failed": 2, "total": 5, "pass_rate": 0.6},
+  "timing": {"executor_duration_seconds": 50.5, "total_duration_seconds": 50.5},
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "Provides specific import statements",
+        "reason": "The baseline gave conceptual 'Replace' recommendations but never provided the actual Python import lines. The with-skill version did provide these, making it actionable without additional lookups."
+      }
+    ],
+    "overall": "Baseline performed well on structure (correctly categorizing items) but missed two key details: providing actual import syntax and flagging the duplicate forward pass as a separate performance concern. The skill adds these specific action items."
+  }
+}
