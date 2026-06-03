@@ -10,6 +10,10 @@ Install deps:
     pip install torch transformers datasets
 """
 
+import os
+# Use HuggingFace mirror for stable access from mainland China
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader

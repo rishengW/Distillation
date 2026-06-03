@@ -28,6 +28,7 @@ Distill a large transformer (e.g. BERT-base) into a smaller one (e.g. DistilBERT
 
 ```bash
 pip install torch transformers datasets
+export HF_ENDPOINT=https://hf-mirror.com # set the mirror
 python distill_transformers.py
 ```
 

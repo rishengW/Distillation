@@ -5,3 +5,8 @@ torchvision>=0.15.0
 # Optional (required for transformer distillation)
 transformers>=4.35.0
 datasets>=2.14.0
+
+# Optional (required for distill_qwen.py — accelerate for device_map="auto",
+# bitsandbytes for int4/int8 teacher quantization on CUDA GPUs)
+accelerate>=0.27.0
+bitsandbytes>=0.43.0 ; platform_system != "Windows"
