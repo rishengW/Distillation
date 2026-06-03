@@ -11,7 +11,7 @@ You can choose between two teachers:
 
 **Option A — From-scratch CNN teacher**
 ```bash
-pip install torch torchvision
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 python train_teacher.py                          # train & save TeacherCNN
 python train_student.py --teacher manual         # distill student
 ```
