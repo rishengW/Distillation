@@ -71,6 +71,21 @@ from transformers import (
 )
 from datasets import load_dataset
 
+# Shared distillation losses and components — canonical versions from
+# losses.py and components.py. Imported here to avoid duplication.
+from losses import (
+    build_layer_map,
+    kl_logits_classification as kl_logits,
+    hidden_mse,
+    attention_kl,
+)
+from components import (
+    HiddenProjector,
+    UncertaintyWeights,
+    EMAModel,
+    build_param_groups,
+)
+
 # Use HuggingFace mirror for stable access from mainland China; matches the
 # convention used by distill_transformers.py at the repo root. Comment out
 # this line if you're outside China.
@@ -211,39 +226,12 @@ print(
 )
 
 
-# ── Layer mapping ─────────────────────────────────────────────────────────────
-# For each student layer, pick which teacher layer to imitate. Skip-mapping
-# (uniform stride) is the standard choice and outperforms last-N mapping.
-def build_layer_map(n_student: int, n_teacher: int) -> list[int]:
-    """Map student layer i (0-indexed) → teacher layer index, evenly spaced."""
-    if n_student == 1:
-        return [n_teacher - 1]
-    # Skip-stride: e.g. 2 student / 12 teacher → [5, 11]
-    stride = n_teacher / n_student
-    return [int(round((i + 1) * stride)) - 1 for i in range(n_student)]
-
-
+# ── Layer mapping (skip-stride, via shared helper) ───────────────────────────
 LAYER_MAP = build_layer_map(student_layers, teacher_layers)
 print(f"  Layer map (student → teacher): {list(enumerate(LAYER_MAP))}")
 
 
-# ── Hidden-state projection heads ─────────────────────────────────────────────
-# Map student hidden dim (128) → teacher hidden dim (768) so MSE is meaningful.
-# One projection per student layer; trained jointly with the student.
-class HiddenProjector(nn.Module):
-    """Linear projections from student hidden size up to teacher hidden size."""
-
-    def __init__(self, n_layers: int, in_dim: int, out_dim: int):
-        super().__init__()
-        # +1 to also align the embedding layer (index 0 in hidden_states)
-        self.projs = nn.ModuleList(
-            [nn.Linear(in_dim, out_dim, bias=False) for _ in range(n_layers + 1)]
-        )
-
-    def forward(self, idx: int, x: torch.Tensor) -> torch.Tensor:
-        return self.projs[idx](x)
-
-
+# ── Hidden-state projection heads (student dim → teacher dim) ─────────────────
 hidden_proj = HiddenProjector(
     n_layers=student_layers,
     in_dim=student_hidden,
@@ -252,103 +240,21 @@ hidden_proj = HiddenProjector(
 
 
 # ── Distillation losses ───────────────────────────────────────────────────────
-def kl_logits(
-    student_logits: torch.Tensor,
-    teacher_logits: torch.Tensor,
-    temperature: float,
-    reverse: bool = False,
-) -> torch.Tensor:
-    """Soft-target KL on classifier logits, scaled by T² for gradient parity."""
-    s = F.log_softmax(student_logits / temperature, dim=-1)
-    t = F.log_softmax(teacher_logits / temperature, dim=-1)
-    if reverse:
-        # KL(student || teacher) — mode-seeking (sharper students, used in
-        # GKD / on-policy LM distillation).
-        loss = F.kl_div(t, s, reduction="batchmean", log_target=True)
-    else:
-        # KL(teacher || student) — mode-covering, the Hinton-2015 default.
-        loss = F.kl_div(s, t, reduction="batchmean", log_target=True)
-    return loss * (temperature ** 2)
-
-
-def hidden_mse(
-    student_hidden_states: tuple[torch.Tensor, ...],
-    teacher_hidden_states: tuple[torch.Tensor, ...],
-    layer_map: list[int],
-    proj: HiddenProjector,
-    attention_mask: torch.Tensor,
-) -> torch.Tensor:
-    """
-    MSE between projected student hiddens and teacher hiddens at mapped layers,
-    averaged only over real (non-padding) tokens.
-
-    student_hidden_states / teacher_hidden_states are tuples of length
-    (num_layers + 1) — index 0 is the embedding output, then one per block.
-    """
-    mask = attention_mask.unsqueeze(-1).float()      # [B, T, 1]
-    n_tokens = mask.sum().clamp(min=1.0)
-    losses = []
-
-    # Align embedding layer too (index 0 on both sides).
-    s_emb = proj(0, student_hidden_states[0])
-    t_emb = teacher_hidden_states[0]
-    losses.append(((s_emb - t_emb) ** 2 * mask).sum() / (n_tokens * t_emb.size(-1)))
-
-    for s_idx, t_idx in enumerate(layer_map):
-        s_h = proj(s_idx + 1, student_hidden_states[s_idx + 1])
-        t_h = teacher_hidden_states[t_idx + 1]
-        losses.append(((s_h - t_h) ** 2 * mask).sum() / (n_tokens * t_h.size(-1)))
-
-    return torch.stack(losses).mean()
-
-
-def attention_kl(
-    student_attn: tuple[torch.Tensor, ...],
-    teacher_attn: tuple[torch.Tensor, ...],
-    layer_map: list[int],
-    attention_mask: torch.Tensor,
-    eps: float = 1e-8,
-) -> torch.Tensor:
-    """
-    KL between teacher and student attention probability matrices at mapped
-    layers. Heads are *averaged* to handle differing head counts (12 vs 2).
-
-    Each attention tensor is [B, H, T, T] of probabilities (already softmaxed).
-    """
-    # Per-query mask: only score rows whose query token is real.
-    q_mask = attention_mask.unsqueeze(-1).float()                 # [B, T, 1]
-    # Per-key mask: zero-out attention paid to padding keys before re-norm.
-    k_mask = attention_mask.unsqueeze(1).float()                  # [B, 1, T]
-
-    losses = []
-    for s_idx, t_idx in enumerate(layer_map):
-        s_a = student_attn[s_idx].mean(dim=1)                     # [B, T, T]
-        t_a = teacher_attn[t_idx].mean(dim=1)                     # [B, T, T]
-
-        # Re-normalize over real keys so masked padding doesn't poison the KL.
-        s_a = s_a * k_mask
-        t_a = t_a * k_mask
-        s_a = s_a / s_a.sum(dim=-1, keepdim=True).clamp(min=eps)
-        t_a = t_a / t_a.sum(dim=-1, keepdim=True).clamp(min=eps)
-
-        # KL(teacher || student) per query, masked & averaged.
-        kl = (t_a * (t_a.clamp(min=eps).log() - s_a.clamp(min=eps).log())).sum(dim=-1)
-        kl = (kl * q_mask.squeeze(-1)).sum() / q_mask.sum().clamp(min=1.0)
-        losses.append(kl)
-
-    return torch.stack(losses).mean()
-
-
 def minilm_relation_loss(
     student_model,
     teacher_model,
-    input_ids: torch.Tensor,
+    student_hidden_states: tuple[torch.Tensor, ...],
+    teacher_hidden_states: tuple[torch.Tensor, ...],
     attention_mask: torch.Tensor,
     relation_heads: int,
     eps: float = 1e-8,
 ) -> torch.Tensor:
     """
     MiniLMv2 last-layer self-relation distillation.
+
+    Uses cached hidden_states from the main forward pass (no duplicate BERT
+    encoder run). Extracts Q, K, V from the last layer's attention projections
+    applied to hidden_states[-2] (the input to the final transformer block).
 
     Concept: instead of matching attention probabilities (which depend on head
     count), we form Q·Q^T / sqrt(d_h), K·K^T / sqrt(d_h), V·V^T / sqrt(d_h)
@@ -359,23 +265,9 @@ def minilm_relation_loss(
     s_enc = student_model.bert.encoder.layer[-1].attention.self
     t_enc = teacher_model.bert.encoder.layer[-1].attention.self
 
-    # Run the encoder up to the last layer to get its inputs (the (L-1)th
-    # hidden state). We rely on the cached hidden_states tuple from the main
-    # forward pass — but the simpler, robust route is to re-fetch them via a
-    # cheap forward; for SST-2 sequence lengths this is negligible.
-    with torch.no_grad():
-        t_outputs = teacher_model.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-        )
-        t_input = t_outputs.hidden_states[-2]                     # [B, T, Dt]
-    s_outputs = student_model.bert(
-        input_ids=input_ids,
-        attention_mask=attention_mask,
-        output_hidden_states=True,
-    )
-    s_input = s_outputs.hidden_states[-2]                         # [B, T, Ds]
+    # Extract Q, K, V from the cached last-layer inputs — no re-forward.
+    s_input = student_hidden_states[-2]                          # [B, T, Ds]
+    t_input = teacher_hidden_states[-2]                          # [B, T, Dt]
 
     def project(enc, x):
         return enc.query(x), enc.key(x), enc.value(x)
@@ -461,87 +353,13 @@ def rkd_loss(
     return dist_loss + angle_loss
 
 
-# ── Uncertainty loss balancer (Kendall et al., 2018) ──────────────────────────
-class UncertaintyWeights(nn.Module):
-    """
-    Learn one log-variance per loss term. The combined loss is
-        Σ_i ( exp(-s_i) · L_i  +  s_i )
-    so the optimizer can shrink unhelpful terms (large s_i → small weight)
-    while a regularizer (s_i) keeps it from collapsing to zero.
-
-    Initialized so each term starts with weight 1.
-    """
-
-    def __init__(self, n: int, init_log_var: float = 0.0):
-        super().__init__()
-        self.log_var = nn.Parameter(torch.full((n,), init_log_var))
-
-    def forward(self, losses: list[torch.Tensor]) -> torch.Tensor:
-        stacked = torch.stack(losses)
-        precision = torch.exp(-self.log_var)
-        return (precision * stacked + self.log_var).sum()
-
-
+# ── Loss balancer & EMA ───────────────────────────────────────────────────────
 N_LOSS_TERMS = 6   # logit, hidden, attn, minilm, rkd, ce
 loss_balancer = UncertaintyWeights(N_LOSS_TERMS).to(CFG.device)
-
-
-# ── EMA shadow ────────────────────────────────────────────────────────────────
-class EMAModel:
-    """Maintain an exponential moving average of model parameters on CPU."""
-
-    def __init__(self, model: nn.Module, decay: float):
-        self.decay = decay
-        self.shadow = {
-            k: v.detach().clone() for k, v in model.state_dict().items()
-        }
-
-    @torch.no_grad()
-    def update(self, model: nn.Module) -> None:
-        for k, v in model.state_dict().items():
-            if v.dtype.is_floating_point:
-                self.shadow[k].mul_(self.decay).add_(v.detach(), alpha=1 - self.decay)
-            else:
-                self.shadow[k] = v.detach().clone()
-
-    def apply_to(self, model: nn.Module) -> dict:
-        """Swap in EMA weights, returning the originals for later restore."""
-        original = {k: v.detach().clone() for k, v in model.state_dict().items()}
-        model.load_state_dict(self.shadow, strict=False)
-        return original
-
-    @staticmethod
-    def restore(model: nn.Module, original: dict) -> None:
-        model.load_state_dict(original, strict=False)
-
-
 ema = EMAModel(student, CFG.ema_decay)
 
 
 # ── Optimizer & schedule ──────────────────────────────────────────────────────
-def build_param_groups(*modules: nn.Module, weight_decay: float):
-    """
-    Standard BERT recipe: no weight decay on bias / LayerNorm parameters.
-    Keeps the regularization on the matrix weights only.
-    """
-    no_decay_keywords = ("bias", "LayerNorm.weight", "layer_norm.weight")
-    decay_params, no_decay_params = [], []
-    seen = set()
-    for m in modules:
-        for n, p in m.named_parameters():
-            if not p.requires_grad or id(p) in seen:
-                continue
-            seen.add(id(p))
-            if any(k in n for k in no_decay_keywords):
-                no_decay_params.append(p)
-            else:
-                decay_params.append(p)
-    return [
-        {"params": decay_params, "weight_decay": weight_decay},
-        {"params": no_decay_params, "weight_decay": 0.0},
-    ]
-
-
 optimizer = torch.optim.AdamW(
     build_param_groups(student, hidden_proj, loss_balancer, weight_decay=CFG.weight_decay),
     lr=CFG.lr,
@@ -598,7 +416,7 @@ for epoch in range(1, CFG.epochs + 1):
     hidden_proj.train()
     loss_balancer.train()
 
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
     epoch_loss   = 0.0
     epoch_terms  = torch.zeros(N_LOSS_TERMS)
     t0 = time.time()
@@ -640,9 +458,11 @@ for epoch in range(1, CFG.epochs + 1):
                 student_out.attentions, teacher_out.attentions,
                 LAYER_MAP, attention_mask,
             )
+            # MiniLMv2 uses cached hidden_states — no duplicate BERT forward pass.
             l_minilm = minilm_relation_loss(
-                student, teacher, input_ids, attention_mask,
-                CFG.minilm_relation_heads,
+                student, teacher,
+                student_out.hidden_states, teacher_out.hidden_states,
+                attention_mask, CFG.minilm_relation_heads,
             )
             # CLS token = position 0 of the last hidden state
             s_cls = student_out.hidden_states[-1][:, 0, :]
@@ -754,4 +574,3 @@ print(f"Teacher  acc: {teacher_acc:.4f}   params: {teacher_params:,}")
 print(f"Student  acc: {final_acc:.4f}   params: {student_params:,}")
 print(f"Accuracy retention : {final_acc / teacher_acc * 100:.1f}%")
 print(f"Parameter reduction: {(1 - student_params / teacher_params) * 100:.1f}%")
-
