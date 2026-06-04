@@ -4,7 +4,7 @@ A multi-signal distillation pipeline for **causal LLMs** that goes well beyond t
 
 ```bash
 python advanced/distill_advanced.py        # Qwen2.5-1.5B → Qwen2.5-0.5B (LLM)
-python advanced/distill_advanced_bert.py   # BERT-base → BERT-tiny on SST-2 (kept for comparison)
+python advanced/distill_advanced_bert.py   # BERT-base → BERT-tiny on SST-2
 ```
 
 ## Teacher / Student
@@ -16,21 +16,22 @@ python advanced/distill_advanced_bert.py   # BERT-base → BERT-tiny on SST-2 (k
 
 Both are decoder-only, instruction-tuned LLMs. Training task: causal language modeling on WikiText-2, evaluated by perplexity.
 
-## Five distillation signals
+## Six distillation signals (5 KD + 1 CE)
 
 | # | Signal | What it matches | Where |
 |---|---|---|---|
 | 1 | **Per-token logit KD** | KL on temperature-softened next-token distributions, masked over real tokens (forward or reverse KL) | `kl_logits_per_token()` |
 | 2 | **Hidden-state matching** | Per-token MSE between projected student hiddens and teacher hiddens at mapped layers (FitNets / Patient-KD) | `hidden_mse()` + `HiddenProjector` |
 | 3 | **Attention-map KD** | KL between teacher and student attention probability matrices (heads averaged, padding-key re-normalized) | `attention_kl()` |
-| 4 | **MiniLMv2 Q-relation KD** | Match Q·Q^T self-relation distributions at the last layer via fixed "relation heads" — Q-only because Qwen uses GQA (Q-dim ≠ K/V-dim) | `minilm_q_relation_loss()` |
-| 5 | **Pooled RKD** | Match pairwise distances and triplet angles of mean-pooled token embeddings across a batch | `pooled_rkd_loss()` |
+| 4 | **MiniLMv2 Q-relation KD** | Match Q·Q^T self-relation distributions at the last layer via fixed "relation heads" — Q-only because Qwen uses GQA (Q-dim ≠ K/V-dim) | `minilm_relation_kl()` |
+| 5 | **Pooled RKD** | Match pairwise distances and triplet angles of mean-pooled token embeddings across a batch (Park et al., 2019) | `rkd_loss_pooled()` |
+| 6 | **Hard CE** | Next-token cross-entropy with `i → i+1` shift — keeps the student grounded in ground truth | `F.cross_entropy()` |
 
-A 6th term — next-token cross-entropy with `i → i+1` shift — keeps the student grounded in ground truth.
+All loss functions live in `losses.py` and are shared between the LLM and BERT training scripts.
 
 ## What changed vs the BERT version
 
-The five signals translate cleanly, but causal LMs need adjustments:
+The six signals translate cleanly, but causal LMs need adjustments:
 
 - **Per-token KL**, not per-sample. Padding masked via `labels != -100`.
 - **No [CLS]** — RKD pools tokens with the attention mask instead.
@@ -39,6 +40,17 @@ The five signals translate cleanly, but causal LMs need adjustments:
 - **`attn_implementation="eager"`** required to actually return attention weights (the default `sdpa` / FlashAttention paths don't expose them).
 - **Perplexity** for eval, not accuracy.
 - **bf16 throughout** (Qwen native dtype). `GradScaler` is auto-disabled when bf16 autocast is active.
+
+The BERT version (`distill_advanced_bert.py`) shares the same canonical loss functions from `losses.py` and components from `components.py` — only the training loop and data pipeline differ. It's kept for comparison and broader test coverage.
+
+## Architecture dispatch — `arch_utils.py`
+
+`arch_utils.py` handles model-specific extraction logic that varies between architectures:
+
+- **GPT-2**: Uses HuggingFace `Conv1D` (not `nn.Linear`) for QKV projections. `Conv1D` weight layout is `[H, 3H]` (in_features, out_features), not `[3H, H]` like `nn.Linear`. The extractor detects `Conv1D` via the `.nf` attribute and slices `[..., :hidden]` to isolate Q-only output.
+- **Qwen2.5**: Standard `nn.Linear` QKV — checked by weight shape.
+- **BERT**: Separate `query`, `key`, `value` modules — no slicing needed.
+- **Other architectures**: Generic extraction via model output attributes (`last_hidden_state`, `hidden_states`, `attentions`).
 
 ## Engineering toolbox
 
@@ -92,6 +104,28 @@ This script is the strong on-policy-free baseline you'd build those on top of.
 
 ## Files
 
-- `distill_advanced.py` — LLM version (Qwen2.5)
-- `distill_advanced_bert.py` — BERT classifier version, kept for comparison and unit-test surface area
-- `README.md` — this file
+```
+advanced/
+├── distill_advanced.py        # LLM training script (Qwen2.5, causal LM)
+├── distill_advanced_bert.py   # BERT training script (SST-2 classifier)
+├── losses.py                  # Canonical distillation loss functions (shared by both scripts)
+├── components.py              # HiddenProjector, UncertaintyWeights, EMAModel, build_param_groups
+├── arch_utils.py              # Architecture dispatch: model-specific hidden/attention extraction
+├── tests/
+│   ├── test_losses.py         # Unit tests for all loss functions
+│   └── test_smoke.py          # End-to-end pipeline smoke tests
+└── README.md                  # This file
+```
+
+Root-level companion scripts:
+
+```
+distill.py                      # Vanilla logit-KD baseline
+distill_qwen.py                 # Qwen-specific KD variant
+distill_transformers.py         # Transformers-based KD
+models.py                       # Model definitions
+train_teacher.py                # Teacher pre-training
+train_teacher_pretrained.py     # Teacher from pretrained checkpoint
+train_student.py                # Student standalone training
+teacher_pretrained.py           # Teacher model utilities
+```
