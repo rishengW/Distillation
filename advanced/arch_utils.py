@@ -81,9 +81,17 @@ def extract_last_q(model, hidden_states):
     for part in q_attr.split("."):
         q_projector = getattr(q_projector, part)
 
-    # Handle combined QKV projections by splitting first third (Q).
-    if hasattr(q_projector, "weight") and q_projector.weight.shape[0] != model.config.hidden_size:
-        hidden = model.config.hidden_size
+    hidden = model.config.hidden_size
+
+    # GPT-2 style: `Conv1D` combined QKV projection. Its weight is laid out as
+    # (in_features, out_features) = [H, 3H], so the shape[0] == H guard below
+    # would wrongly skip splitting. Conv1D.forward yields [B, T, 3H] with Q
+    # first, so slice the leading hidden block to recover Q-only.
+    if hasattr(q_projector, "nf"):  # transformers.pytorch_utils.Conv1D
+        return q_projector(normed)[..., :hidden]
+
+    # Linear combined QKV (GPT-NeoX style): weight is [3H, H]; split rows for Q.
+    if hasattr(q_projector, "weight") and q_projector.weight.shape[0] != hidden:
         q_proj = _split_q_from_qkv(q_projector.weight.data, hidden)
         return q_proj(normed.to(q_proj.weight.dtype))
 
