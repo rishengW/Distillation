@@ -52,7 +52,6 @@ loops, so the script stays grep-friendly.
 
 from __future__ import annotations
 
-import math
 import os
 import random
 import sys
@@ -85,6 +84,8 @@ from losses import (
     kl_logits_classification as kl_logits,
     hidden_mse,
     attention_kl,
+    minilm_relation_kl,
+    rkd_loss_pooled,
 )
 from components import (
     HiddenProjector,
@@ -257,17 +258,13 @@ def minilm_relation_loss(
     eps: float = 1e-8,
 ) -> torch.Tensor:
     """
-    MiniLMv2 last-layer self-relation distillation.
+    MiniLMv2 last-layer self-relation distillation (Q/K/V).
 
     Uses cached hidden_states from the main forward pass (no duplicate BERT
     encoder run). Extracts Q, K, V from the last layer's attention projections
-    applied to hidden_states[-2] (the input to the final transformer block).
-
-    Concept: instead of matching attention probabilities (which depend on head
-    count), we form Q·Q^T / sqrt(d_h), K·K^T / sqrt(d_h), V·V^T / sqrt(d_h)
-    at the last transformer layer and match those distributions. By reshaping
-    to a fixed `relation_heads` count, the loss is independent of the actual
-    head count of either model.
+    applied to hidden_states[-2] (the input to the final transformer block),
+    then defers the head-agnostic relation KL to the canonical
+    ``minilm_relation_kl`` in losses.py — averaging over the three relations.
     """
     s_enc = student_model.bert.encoder.layer[-1].attention.self
     t_enc = teacher_model.bert.encoder.layer[-1].attention.self
@@ -283,81 +280,27 @@ def minilm_relation_loss(
     with torch.no_grad():
         t_q, t_k, t_v = project(t_enc, t_input)
 
-    def reshape_to_relation_heads(x: torch.Tensor) -> torch.Tensor:
-        """[B, T, D] → [B, relation_heads, T, D / relation_heads]."""
-        B, T, D = x.shape
-        assert D % relation_heads == 0, (
-            f"hidden size {D} not divisible by relation_heads={relation_heads}"
-        )
-        d_h = D // relation_heads
-        return x.view(B, T, relation_heads, d_h).permute(0, 2, 1, 3).contiguous()
-
-    def relation_distribution(x: torch.Tensor) -> torch.Tensor:
-        """x: [B, H, T, d_h] → softmax over keys of x · x^T / sqrt(d_h)."""
-        d_h = x.size(-1)
-        scores = torch.matmul(x, x.transpose(-1, -2)) / math.sqrt(d_h)
-        # Mask padding keys before softmax.
-        key_mask = attention_mask.unsqueeze(1).unsqueeze(2)        # [B, 1, 1, T]
-        scores = scores.masked_fill(key_mask == 0, float("-inf"))
-        return F.softmax(scores, dim=-1)
-
-    losses = []
-    for s_x, t_x in [(s_q, t_q), (s_k, t_k), (s_v, t_v)]:
-        s_rel = relation_distribution(reshape_to_relation_heads(s_x))
-        t_rel = relation_distribution(reshape_to_relation_heads(t_x))
-        # KL per (head, query) row, masked & averaged over real queries.
-        kl = (t_rel * (t_rel.clamp(min=eps).log() - s_rel.clamp(min=eps).log())).sum(-1)
-        q_mask = attention_mask.unsqueeze(1).float()               # [B, 1, T]
-        kl = (kl * q_mask).sum() / (q_mask.sum() * relation_heads).clamp(min=1.0)
-        losses.append(kl)
-
+    losses = [
+        minilm_relation_kl(s_x, t_x, attention_mask, relation_heads, eps=eps)
+        for s_x, t_x in [(s_q, t_q), (s_k, t_k), (s_v, t_v)]
+    ]
     return torch.stack(losses).mean()
 
 
 def rkd_loss(
     student_cls: torch.Tensor,
     teacher_cls: torch.Tensor,
-    eps: float = 1e-8,
 ) -> torch.Tensor:
     """
     Relational KD on [CLS] embeddings (Park et al., 2019).
 
-    Distance term: match pairwise L2 distances between samples in a batch
-                   (after dividing by the mean nonzero distance for scale
-                   invariance — student & teacher live in different geometries).
-    Angle term:    match the cosine of the angle formed by every triplet
-                   (i, j, k) where j is the apex.
-
-    This forces the student to preserve sample-to-sample relationships,
-    which is exactly what the classifier head needs.
+    Thin wrapper over the canonical ``rkd_loss_pooled`` in losses.py: matches
+    pairwise distances and triplet angles between samples in a batch, forcing
+    the student to preserve sample-to-sample geometry rather than just
+    absolute features. RKD is scale-invariant, so raw vectors of differing
+    dims are compared directly.
     """
-    # Project teacher CLS down to student CLS dim for fair comparison? No —
-    # RKD is scale-invariant by construction, so we can compare raw vectors.
-
-    # ── Distance term ─────────────────────────────────────────────────────────
-    def pdist(x):
-        diff = x.unsqueeze(0) - x.unsqueeze(1)                     # [B, B, D]
-        return diff.norm(dim=-1)                                    # [B, B]
-
-    s_d = pdist(student_cls)
-    t_d = pdist(teacher_cls)
-    s_d = s_d / s_d[s_d > 0].mean().clamp(min=eps)
-    t_d = t_d / t_d[t_d > 0].mean().clamp(min=eps)
-    dist_loss = F.smooth_l1_loss(s_d, t_d)
-
-    # ── Angle term ────────────────────────────────────────────────────────────
-    def pangle(x):
-        # vector from j to i and from j to k, then cosine for each (i, j, k)
-        vd = x.unsqueeze(0) - x.unsqueeze(1)                        # [B, B, D]
-        vd = F.normalize(vd, p=2, dim=-1)
-        # angle = vd_ij · vd_kj^T → [B, B, B]
-        return torch.einsum("ijd,kjd->ijk", vd, vd)
-
-    s_a = pangle(student_cls)
-    t_a = pangle(teacher_cls)
-    angle_loss = F.smooth_l1_loss(s_a, t_a)
-
-    return dist_loss + angle_loss
+    return rkd_loss_pooled(student_cls, teacher_cls)
 
 
 # ── Loss balancer & EMA ───────────────────────────────────────────────────────
